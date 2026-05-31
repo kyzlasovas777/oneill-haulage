@@ -423,8 +423,7 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
       return
     }
 
-  if (savedWeekTitle !== currentWeekTitle) {
-      console.log("ARCHIVE TEST", entries.length)
+if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
     if (entries.length > 0) {
         setArchives((prev) => [
           {
