@@ -578,22 +578,41 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
     onBack?.()
   }
 
-  const filesToBase64 = async (files: File[]) => {
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
+const filesToBase64 = async (files: File[]) => {
+  const compressFile = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const img = new Image()
+      const reader = new FileReader()
 
-          reader.onload = () => {
-            resolve(reader.result as string)
-          }
+      reader.onload = () => {
+        img.src = reader.result as string
+      }
 
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-    )
-  )
+      img.onload = () => {
+        const canvas = document.createElement("canvas")
+        const maxWidth = 1000
+        const scale = Math.min(1, maxWidth / img.width)
+
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+
+        const ctx = canvas.getContext("2d")
+        if (!ctx) {
+          reject("Canvas error")
+          return
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+        resolve(canvas.toDataURL("image/jpeg", 0.55))
+      }
+
+      reader.onerror = reject
+      img.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+  return Promise.all(files.map(compressFile))
 }
 
   const saveEntry = async () => {
