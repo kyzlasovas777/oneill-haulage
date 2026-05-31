@@ -1,0 +1,442 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { supabase } from "./supabase"
+
+type Driver = {
+  id: number
+  name: string
+  pin: string
+  active?: boolean
+  syncStatus?: "synced" | "pending"
+}
+
+type Entry = {
+  id: number
+  date: string
+  trailer: string
+  from: string
+  to: string
+  status: string
+  note: string
+}
+
+type BossDashboardProps = {
+  onLogout: () => void
+  onOpenDriver: (driver: Driver) => void
+}
+
+const STORAGE_KEY = "oneill-drivers"
+
+function loadDrivers(): Driver[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+
+function sortDrivers(drivers: Driver[]) {
+  return [...drivers].sort((a, b) => {
+    const aActive = a.active !== false
+    const bActive = b.active !== false
+
+    if (aActive !== bActive) {
+      return aActive ? -1 : 1
+    }
+
+    return a.name.localeCompare(b.name)
+  })
+}
+
+function getDriverRows(driverId: number) {
+  if (typeof window === "undefined") return 0
+
+  try {
+    const saved = localStorage.getItem(`oneill-entries-${driverId}`)
+    const entries: Entry[] = saved ? JSON.parse(saved) : []
+    return entries.length
+  } catch {
+    return 0
+  }
+}
+
+export default function BossDashboard({
+  onLogout,
+  onOpenDriver,
+}: BossDashboardProps) {
+  const [drivers, setDrivers] = useState<Driver[]>(() =>
+    sortDrivers(loadDrivers())
+  )
+
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [showAddDriver, setShowAddDriver] = useState(false)
+  const [editingDriverId, setEditingDriverId] = useState<number | null>(null)
+  const [driverName, setDriverName] = useState("")
+  const [driverPin, setDriverPin] = useState("")
+  const [syncText, setSyncText] = useState("Offline ready")
+  const [syncing, setSyncing] = useState(false)
+
+  const saveDriversLocal = (nextDrivers: Driver[]) => {
+    const sorted = sortDrivers(nextDrivers)
+    setDrivers(sorted)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted))
+    setRefreshKey((prev) => prev + 1)
+  }
+
+  const syncDrivers = async () => {
+    const localDrivers = loadDrivers()
+    setSyncing(true)
+    setSyncText("Syncing...")
+
+    for (const driver of localDrivers) {
+      if (driver.syncStatus === "pending") {
+        const isLocalOnly = driver.id > 1000000000000
+
+        if (isLocalOnly) {
+          const { data, error } = await supabase
+            .from("drivers")
+            .insert({
+              name: driver.name,
+              pin: driver.pin,
+              active: driver.active !== false,
+            })
+            .select("id, name, pin, active")
+            .single()
+
+          if (error) {
+            console.log("SYNC ERROR:", error)
+            setSyncText("Sync error: " + error.message)
+            setSyncing(false)
+            return
+          }
+
+          const updatedDrivers = loadDrivers().map((item) =>
+            item.id === driver.id
+              ? { ...data, syncStatus: "synced" as const }
+              : item
+          )
+
+          saveDriversLocal(updatedDrivers)
+        } else {
+          const { data, error } = await supabase
+            .from("drivers")
+            .update({
+              name: driver.name,
+              pin: driver.pin,
+              active: driver.active !== false,
+            })
+            .eq("id", driver.id)
+            .select("id, name, pin, active")
+            .single()
+
+          if (error) {
+            console.log("UPDATE ERROR:", error)
+            setSyncText("Sync error: " + error.message)
+            setSyncing(false)
+            return
+          }
+
+          const updatedDrivers = loadDrivers().map((item) =>
+            item.id === driver.id
+              ? { ...data, syncStatus: "synced" as const }
+              : item
+          )
+
+          saveDriversLocal(updatedDrivers)
+        }
+      }
+    }
+
+    setSyncText("Synced")
+    setSyncing(false)
+  }
+
+  const loadFromSupabase = async () => {
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("id, name, pin, active")
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+
+    if (error) {
+      console.log("LOAD DRIVERS ERROR:", error)
+      setSyncText("Offline mode")
+      return
+    }
+
+    const pendingLocal = loadDrivers().filter(
+      (driver) => driver.syncStatus === "pending"
+    )
+
+    const remoteDrivers: Driver[] = (data ?? []).map((driver) => ({
+      ...driver,
+      active: driver.active !== false,
+      syncStatus: "synced",
+    }))
+
+    const mergedDrivers = [...remoteDrivers]
+
+    for (const pendingDriver of pendingLocal) {
+      const existingIndex = mergedDrivers.findIndex(
+        (driver) => driver.id === pendingDriver.id
+      )
+
+      if (existingIndex >= 0) {
+        mergedDrivers[existingIndex] = pendingDriver
+      } else {
+        mergedDrivers.push(pendingDriver)
+      }
+    }
+
+    saveDriversLocal(mergedDrivers)
+    setSyncText("Loaded from Supabase")
+  }
+
+  useEffect(() => {
+    loadFromSupabase()
+
+    const handleOnline = () => {
+      syncDrivers()
+    }
+
+    window.addEventListener("online", handleOnline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+    }
+  }, [])
+
+  const openAddDriver = () => {
+    setEditingDriverId(null)
+    setDriverName("")
+    setDriverPin("")
+    setShowAddDriver(true)
+  }
+
+  const openEditDriver = (driver: Driver) => {
+    setEditingDriverId(driver.id)
+    setDriverName(driver.name)
+    setDriverPin(driver.pin)
+    setShowAddDriver(true)
+  }
+
+  const saveDriver = async () => {
+    const cleanName = driverName.trim()
+    const cleanPin = driverPin.trim()
+
+    if (!cleanName) return
+
+    if (!/^\d{4}$/.test(cleanPin)) {
+      alert("PIN must be 4 numbers")
+      return
+    }
+
+    const pinExists = drivers.some(
+      (driver) => driver.pin === cleanPin && driver.id !== editingDriverId
+    )
+
+    if (pinExists) {
+      alert("This PIN already exists")
+      return
+    }
+
+    if (editingDriverId) {
+      const nextDrivers = drivers.map((driver) =>
+        driver.id === editingDriverId
+          ? {
+              ...driver,
+              name: cleanName,
+              pin: cleanPin,
+              syncStatus: "pending" as const,
+            }
+          : driver
+      )
+
+      saveDriversLocal(nextDrivers)
+    } else {
+      const newDriver: Driver = {
+        id: Date.now(),
+        name: cleanName,
+        pin: cleanPin,
+        active: true,
+        syncStatus: "pending",
+      }
+
+      saveDriversLocal([...drivers, newDriver])
+    }
+
+    setDriverName("")
+    setDriverPin("")
+    setEditingDriverId(null)
+    setShowAddDriver(false)
+
+    if (navigator.onLine) {
+      setTimeout(() => {
+        syncDrivers()
+      }, 300)
+    } else {
+      setSyncText("Saved offline. Will sync later.")
+    }
+  }
+
+  const toggleDriverActive = async (driver: Driver) => {
+    const nextDrivers = drivers.map((item) =>
+      item.id === driver.id
+        ? {
+            ...item,
+            active: item.active === false ? true : false,
+            syncStatus: "pending" as const,
+          }
+        : item
+    )
+
+    saveDriversLocal(nextDrivers)
+
+    if (navigator.onLine) {
+      setTimeout(() => {
+        syncDrivers()
+      }, 300)
+    } else {
+      setSyncText("Saved offline. Will sync later.")
+    }
+  }
+
+  const visibleDrivers = sortDrivers(drivers)
+
+  return (
+    <main className="min-h-screen bg-[#efeff4] px-4 pt-8">
+      <div className="flex items-center justify-between mb-2">
+        <button
+          onClick={onLogout}
+          className="text-blue-500 text-[17px] font-bold"
+        >
+          Logout
+        </button>
+
+        <h1 className="text-[24px] font-black text-black">Boss Dashboard</h1>
+
+        <button
+          onClick={syncDrivers}
+          className="text-blue-500 text-[15px] font-bold"
+        >
+          Sync
+        </button>
+      </div>
+
+      <p className="text-center text-[13px] text-zinc-400 mb-4">
+        {syncing ? "Syncing..." : syncText}
+      </p>
+
+      <div className="space-y-3">
+        {visibleDrivers.map((driver) => {
+          const isActive = driver.active !== false
+
+          return (
+            <div
+              key={`${driver.id}-${refreshKey}`}
+              onClick={() => onOpenDriver(driver)}
+              className={`rounded-[22px] p-4 active:scale-[0.98] transition-all ${
+                isActive ? "bg-white" : "bg-zinc-200 opacity-70"
+              }`}
+            >
+              <p className="text-[20px] font-bold text-black">
+                {isActive ? "🟢 " : "⚫ "}
+                {driver.name}
+                {driver.syncStatus === "pending" ? " ⏳" : ""}
+              </p>
+
+              <p className="text-[14px] text-zinc-400">PIN: {driver.pin}</p>
+
+              <p className="text-[14px] text-zinc-400 mb-3">
+                This week rows: {getDriverRows(driver.id)}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openEditDriver(driver)
+                  }}
+                  className="flex-1 h-[40px] rounded-[16px] bg-blue-500 text-white text-[15px] font-bold"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleDriverActive(driver)
+                  }}
+                  className={`flex-1 h-[40px] rounded-[16px] text-white text-[15px] font-bold ${
+                    isActive ? "bg-zinc-500" : "bg-green-500"
+                  }`}
+                >
+                  {isActive ? "Disable" : "Enable"}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+
+        <button
+          onClick={openAddDriver}
+          className="w-full h-[52px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold"
+        >
+          + Add Driver
+        </button>
+      </div>
+
+      {showAddDriver && (
+        <div className="fixed inset-0 bg-black/20 z-[90] flex items-end justify-center">
+          <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
+            <h2 className="text-center text-[24px] font-bold text-black mb-5">
+              {editingDriverId ? "Edit Driver" : "Add Driver"}
+            </h2>
+
+            <input
+              placeholder="Driver name"
+              value={driverName}
+              onChange={(e) => setDriverName(e.target.value)}
+              className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none mb-2"
+            />
+
+            <input
+              type="tel"
+              placeholder="4 digit PIN"
+              value={driverPin}
+              maxLength={4}
+              inputMode="numeric"
+              onChange={(e) =>
+                setDriverPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none mb-3"
+            />
+
+            <button
+              onClick={saveDriver}
+              className="w-full h-[50px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold"
+            >
+              {editingDriverId ? "Save Changes" : "Save Driver"}
+            </button>
+
+            <button
+              onClick={() => {
+                setShowAddDriver(false)
+                setEditingDriverId(null)
+                setDriverName("")
+                setDriverPin("")
+              }}
+              className="w-full h-[46px] mt-2 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </main>
+  )
+}
