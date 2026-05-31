@@ -1190,17 +1190,21 @@ setSaving(true)
             <h2 className="text-center text-[20px] font-bold text-black mb-2">
               {editingId ? "Edit Entry" : "New Entry"}
             </h2>
+ <input
+  placeholder="Trailer No"
+  value={newEntry.trailer}
+  onChange={(e) =>
+    setNewEntry((prev) => ({
+      ...prev,
+      trailer: e.target.value.toUpperCase(),
+    }))
+  }
+  className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
+/>
 
-            <input
-              placeholder="Trailer No"
-              value={newEntry.trailer}
-              onChange={(e) =>
-                setNewEntry((prev) => ({ ...prev, trailer: e.target.value }))
-              }
-              className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
-            />
 
-            <select
+
+  <select
               value={newEntry.from}
               onChange={(e) =>
                 setNewEntry((prev) => ({ ...prev, from: e.target.value }))
