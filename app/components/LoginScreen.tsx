@@ -22,41 +22,64 @@ export default function LoginScreen({
   const [pin, setPin] = useState("")
   const [debug, setDebug] = useState("Waiting...")
 
-  const login = async () => {
-    const cleanPin = pin.trim()
-    setDebug("Checking...")
+ const login = async () => {
+  const cleanPin = pin.trim()
+  setDebug("Checking...")
 
-    if (!cleanPin) {
-      setDebug("Enter PIN")
-      return
-    }
-
-    if (cleanPin === "9999") {
-      setDebug("Boss login OK")
-      onAdminLogin()
-      return
-    }
-
-    const { data, error } = await supabase
-      .from("drivers")
-      .select("id, name, pin, active")
-      .eq("pin", cleanPin)
-      .eq("active", true)
-      .maybeSingle()
-
-    if (error) {
-      setDebug("Supabase error: " + error.message)
-      return
-    }
-
-    if (!data) {
-      setDebug("Invalid PIN or driver disabled")
-      return
-    }
-
-    setDebug("Driver login OK")
-    onDriverLogin(data)
+  if (!cleanPin) {
+    setDebug("Enter PIN")
+    return
   }
+
+  if (cleanPin === "9999") {
+    setDebug("Boss login OK")
+    onAdminLogin()
+    return
+  }
+
+  if (!navigator.onLine) {
+    const savedDriverRaw = localStorage.getItem("lastDriver")
+
+    if (!savedDriverRaw) {
+      setDebug("No internet. Login once online first.")
+      return
+    }
+
+    const savedDriver = JSON.parse(savedDriverRaw) as Driver
+
+    if (savedDriver.pin !== cleanPin) {
+      setDebug("No internet. Wrong saved PIN.")
+      return
+    }
+
+    setDebug("Offline driver login OK")
+    onDriverLogin(savedDriver)
+    return
+  }
+
+  const { data, error } = await supabase
+    .from("drivers")
+    .select("id, name, pin, active")
+    .eq("pin", cleanPin)
+    .eq("active", true)
+    .maybeSingle()
+
+  if (error) {
+    setDebug("Supabase error: " + error.message)
+
+    return
+  }
+
+  if (!data) {
+    setDebug("Invalid PIN or driver disabled")
+    return
+  }
+
+  localStorage.setItem("lastDriver", JSON.stringify(data))
+
+  setDebug("Driver login OK")
+  onDriverLogin(data)
+}
 
   return (
     <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
