@@ -193,6 +193,37 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
   const visibleTitle =
     screen === "archive" && activeArchive ? activeArchive.title : currentWeekTitle
 
+    const uploadLocalPhotosForEntry = async (entryId: number, localPhotos?: string[]) => {
+  if (!localPhotos || localPhotos.length === 0) return
+
+  for (let i = 0; i < localPhotos.length; i++) {
+    const response = await fetch(localPhotos[i])
+    const blob = await response.blob()
+
+    const filePath = `${driverId}/${entryId}/${Date.now()}-${i}.jpg`
+
+    const { error: uploadError } = await supabase.storage
+      .from("entry-photos")
+      .upload(filePath, blob)
+
+    if (uploadError) throw uploadError
+
+    const { data: publicData } = supabase.storage
+      .from("entry-photos")
+      .getPublicUrl(filePath)
+
+    const { error: photoInsertError } = await supabase
+      .from("entry_photos")
+      .insert({
+        entry_id: entryId,
+        photo_url: publicData.publicUrl,
+        file_path: filePath,
+      })
+
+    if (photoInsertError) throw photoInsertError
+  }
+}
+
   const syncEntries = async () => {
     if (screen !== "main") return
 
@@ -227,9 +258,18 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
             return
           }
 
+          try {
+  await uploadLocalPhotosForEntry(data.id, entry.localPhotos)
+} catch (photoError) {
+  console.log("PHOTO SYNC ERROR:", photoError)
+  setSyncText("Photo sync error")
+  setSyncing(false)
+  return
+}
+
           const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
             item.id === entry.id
-              ? { ...item, id: data.id, syncStatus: "synced" as const }
+           ? { ...item, id: data.id, localPhotos: [], syncStatus: "synced" as const }
               : item
           )
 
