@@ -11,6 +11,7 @@ type Entry = {
   to: string
   status: string
   note: string
+  localPhotos?: string[]
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
@@ -499,7 +500,11 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
       note: entry.note,
     })
 
-    loadEntryPhotos(entry.id)
+   if (entry.localPhotos && entry.localPhotos.length > 0) {
+  setPhotoPreviews(entry.localPhotos)
+} else {
+  loadEntryPhotos(entry.id)
+}
 
     setMenuEntry(null)
     setShowModal(true)
@@ -533,6 +538,24 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
     onBack?.()
   }
 
+  const filesToBase64 = async (files: File[]) => {
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+
+          reader.onload = () => {
+            resolve(reader.result as string)
+          }
+
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+    )
+  )
+}
+
   const saveEntry = async () => {
     saveUsedPlacesToTop()
 
@@ -541,6 +564,8 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
       : null
 
     const entryDate = oldEntry?.date ?? currentDate
+
+    const localPhotos = await filesToBase64(photoFiles)
 
     if (navigator.onLine && screen === "main") {
       setSyncing(true)
@@ -640,12 +665,13 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
       } else {
         nextEntries = [
           ...visibleEntries,
-          {
-            id: Date.now(),
-            date: currentDate,
-            ...newEntry,
-            syncStatus: "pending",
-          },
+        {
+  id: Date.now(),
+  date: currentDate,
+  ...newEntry,
+  localPhotos,
+  syncStatus: "pending",
+},
         ]
       }
 
