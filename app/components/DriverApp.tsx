@@ -694,11 +694,11 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
       <div className="px-4 pt-6 pb-1">
         <div className="flex items-center justify-between">
           <button
-            onClick={handleBackButton}
-            className="w-[40px] text-left text-[34px] text-blue-500 font-bold"
-          >
-            {onBack ? "‹" : ""}
-          </button>
+  onClick={handleBackButton}
+  className="text-blue-500 text-[18px] font-medium"
+>
+  Logout
+</button>
 
           <div className="flex flex-col items-center">
             <h1 className="text-[24px] font-black tracking-tight text-black">
