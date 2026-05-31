@@ -1291,7 +1291,7 @@ const filesToBase64 = async (files: File[]) => {
                 key={item.id}
                 src={item.photo_url}
                 alt="saved photo"
-                className="w-full h-[180px] object-cover rounded-[20px] mb-2"
+               className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block"
               />
             ))}
 
@@ -1300,7 +1300,7 @@ const filesToBase64 = async (files: File[]) => {
                 key={url}
                 src={url}
                 alt={`preview ${index + 1}`}
-                className="w-full h-[180px] object-cover rounded-[20px] mb-2"
+              className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block"
               />
             ))}
 
