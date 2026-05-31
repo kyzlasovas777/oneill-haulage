@@ -95,6 +95,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 export default function DriverApp({ driverId, driverName, onBack }: DriverAppProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const entriesStorageKey = `oneill-entries-${driverId}`
   const archivesStorageKey = `oneill-archives-${driverId}`
@@ -616,6 +617,10 @@ const filesToBase64 = async (files: File[]) => {
 }
 
   const saveEntry = async () => {
+
+    if (saving) return
+
+setSaving(true)
     saveUsedPlacesToTop()
 
     const oldEntry = editingId
@@ -741,6 +746,7 @@ const filesToBase64 = async (files: File[]) => {
     setShowModal(false)
     setEditingId(null)
     clearPhotos()
+   setSaving(false)
 
     setNewEntry({
       trailer: "",
@@ -1304,12 +1310,13 @@ const filesToBase64 = async (files: File[]) => {
               />
             ))}
 
-            <button
-              onClick={saveEntry}
-              className="w-full h-[46px] rounded-[22px] bg-blue-500 text-white text-[20px] font-bold active:scale-[0.98]"
-            >
-              Save Entry
-            </button>
+           <button
+  onClick={saveEntry}
+  disabled={saving}
+  className="w-full h-[46px] rounded-[22px] bg-blue-500 text-white text-[20px] font-bold active:scale-[0.98] disabled:opacity-50"
+>
+  {saving ? "Saving..." : "Save Entry"}
+</button>
 
             <button
               onClick={() => {
