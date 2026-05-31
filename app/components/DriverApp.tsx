@@ -1031,7 +1031,7 @@ const filesToBase64 = async (files: File[]) => {
       )}
 
       {showPlaceModal && (
-        <div className="fixed inset-0 bg-black/20 z-[80] flex items-end justify-center">
+       <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
           <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
             <h2 className="text-center text-[24px] font-bold text-black mb-5">
               Add New Place
