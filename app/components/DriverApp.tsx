@@ -1179,7 +1179,7 @@ const filesToBase64 = async (files: File[]) => {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/20 z-[90] flex items-end justify-center">
+      <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
        <div className="w-full max-w-[430px] max-h-[100vh] bg-[#efeff4] rounded-t-[34px] px-4 pt-[52px] pb-6 overflow-y-auto">
             <h2 className="text-center text-[20px] font-bold text-black mb-2">
               {editingId ? "Edit Entry" : "New Entry"}
