@@ -4,6 +4,7 @@ import { useState } from "react"
 import DriverApp from "./components/DriverApp"
 import LoginScreen from "./components/LoginScreen"
 import BossDashboard from "./components/BossDashboard"
+import { useEffect } from "react"
 
 type Driver = {
   id: number
@@ -12,6 +13,16 @@ type Driver = {
 }
 
 export default function Home() {
+
+useEffect(() => {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(() => console.log("SW registered"))
+      .catch((err) => console.log("SW error", err))
+  }
+}, [])
+
   const [screen, setScreen] = useState<"login" | "driver" | "admin">("login")
   const [activeDriver, setActiveDriver] = useState<Driver | null>(null)
   const [openedFromBoss, setOpenedFromBoss] = useState(false)
