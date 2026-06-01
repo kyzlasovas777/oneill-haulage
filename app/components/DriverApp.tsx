@@ -59,7 +59,8 @@ function formatEntryDate(date: Date) {
 
 function getWeekTitleFromEntryDate(dateText: string) {
   const [year, month, day] = dateText.split(".").map(Number)
-  const date = new Date(year, month - 1, day)
+ const date = new Date(year, month - 1, day)
+date.setHours(12, 0, 0, 0)
   const monday = getWeekStart(date)
 
   const sunday = new Date(monday)
@@ -627,7 +628,7 @@ setSaving(true)
       ? visibleEntries.find((entry) => entry.id === editingId)
       : null
 
-    const entryDate = oldEntry?.date ?? currentDate
+   const entryDate = oldEntry?.date ?? formatEntryDate(new Date())
 
     const localPhotos = await filesToBase64(photoFiles)
 
@@ -1209,6 +1210,9 @@ setSaving(true)
               onChange={(e) =>
                 setNewEntry((prev) => ({ ...prev, from: e.target.value }))
               }
+
+
+ 
               className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center text-blue-500 outline-none mb-1"
             >
               {places.map((place, index) => (
