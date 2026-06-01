@@ -135,6 +135,8 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
   const [savedPhotos, setSavedPhotos] = useState<EntryPhoto[]>([])
 
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
+
   const [menuEntry, setMenuEntry] = useState<Entry | null>(null)
   const [showMainMenu, setShowMainMenu] = useState(false)
 
@@ -1351,21 +1353,23 @@ setSaving(true)
             </label>
 
             {savedPhotos.map((item) => (
-              <img
-                key={item.id}
-                src={item.photo_url}
-                alt="saved photo"
-               className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block"
-              />
+            <img
+  key={item.id}
+  src={item.photo_url}
+  alt="saved photo"
+  onClick={() => setSelectedPhoto(item.photo_url)}
+  className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block cursor-pointer"
+/>
             ))}
 
             {photoPreviews.map((url, index) => (
-              <img
-                key={url}
-                src={url}
-                alt={`preview ${index + 1}`}
-              className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block"
-              />
+           <img
+  key={url}
+  src={url}
+  alt={`preview ${index + 1}`}
+  onClick={() => setSelectedPhoto(url)}
+  className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block cursor-pointer"
+/>
             ))}
 
            <button
@@ -1389,6 +1393,20 @@ setSaving(true)
           </div>
         </div>
       )}
+
+{selectedPhoto && (
+  <div
+    className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
+    onClick={() => setSelectedPhoto(null)}
+  >
+    <img
+      src={selectedPhoto}
+      alt="Full screen"
+      className="max-w-full max-h-full object-contain"
+    />
+  </div>
+)}
+
     </main>
   )
 }
