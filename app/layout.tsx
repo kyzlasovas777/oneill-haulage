@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "O'Neill Haulage",
   description: "Driver App",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-512.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
