@@ -495,16 +495,66 @@ if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
     setSavedPhotos(data ?? [])
   }
 
+  const compressPhotoForUpload = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const reader = new FileReader()
+
+      reader.onload = () => {
+        img.src = reader.result as string
+      }
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas")
+        const maxWidth = 1400
+        const scale = Math.min(1, maxWidth / img.width)
+
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+
+        const ctx = canvas.getContext("2d")
+        if (!ctx) {
+          reject("Canvas error")
+          return
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject("Compression error")
+              return
+            }
+
+            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 1024))
+            resolve(blob)
+          },
+          "image/jpeg",
+          0.65
+        )
+      }
+
+      reader.onerror = reject
+      img.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
   const uploadPhotosForEntry = async (entryId: number) => {
     if (photoFiles.length === 0) return
 
     for (const file of photoFiles) {
+      const compressedFile = await compressPhotoForUpload(file)
+
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
       const filePath = `${driverId}/${entryId}/${Date.now()}-${cleanName}`
 
       const { error: uploadError } = await supabase.storage
         .from("entry-photos")
-        .upload(filePath, file)
+        .upload(filePath, compressedFile, {
+          contentType: "image/jpeg",
+        })
 
       if (uploadError) {
         console.log("PHOTO UPLOAD ERROR:", uploadError)
