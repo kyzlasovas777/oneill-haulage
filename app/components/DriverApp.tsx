@@ -685,146 +685,91 @@ const filesToBase64 = async (files: File[]) => {
   return Promise.all(files.map(compressFile))
 }
 
-  const saveEntry = async () => {
+const saveEntry = async () => {
+  if (saving) return
 
-    if (saving) return
+  setSaving(true)
 
-setSaving(true)
-    saveUsedPlacesToTop()
+  const savedNewEntry = { ...newEntry }
+  const savedEditingId = editingId
+  const savedPhotoFiles = [...photoFiles]
 
-    const oldEntry = editingId
-      ? visibleEntries.find((entry) => entry.id === editingId)
-      : null
+  saveUsedPlacesToTop()
 
-   const entryDate = oldEntry?.date ?? formatEntryDate(new Date())
+  const oldEntry = savedEditingId
+    ? visibleEntries.find((entry) => entry.id === savedEditingId)
+    : null
 
-    const localPhotos = await filesToBase64(photoFiles)
+  const entryDate = oldEntry?.date ?? formatEntryDate(new Date())
+  const localId = savedEditingId ?? Date.now()
 
-    if (navigator.onLine && screen === "main") {
-      setSyncing(true)
-      setSyncText("Syncing...")
-
-      if (editingId) {
-        const { error } = await supabase
-          .from("entries")
-          .update({
-            entry_date: entryDate,
-            trailer: newEntry.trailer,
-            from_place: newEntry.from,
-            to_place: newEntry.to,
-            status: newEntry.status,
-            note: newEntry.note,
-          })
-          .eq("id", editingId)
-
-        if (error) {
-          console.log("ENTRY UPDATE ERROR:", error)
-          setSyncText("Sync error: " + error.message)
-          setSyncing(false)
-          return
-        }
-
-        try {
-          await uploadPhotosForEntry(editingId)
-        } catch {
-          setSyncText("Photo upload error")
-          setSyncing(false)
-          return
-        }
-
-        const nextEntries = visibleEntries.map((entry) =>
-          entry.id === editingId
-            ? { ...entry, ...newEntry, date: entryDate, syncStatus: "synced" as const }
-            : entry
-        )
-
-        updateVisibleEntries(nextEntries)
-        localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
-      } else {
-        const { data, error } = await supabase
-          .from("entries")
-          .insert({
-            driver_id: driverId,
-            entry_date: currentDate,
-            trailer: newEntry.trailer,
-            from_place: newEntry.from,
-            to_place: newEntry.to,
-            status: newEntry.status,
-            note: newEntry.note,
-          })
-          .select("id")
-          .single()
-
-        if (error) {
-          console.log("ENTRY INSERT ERROR:", error)
-          setSyncText("Sync error: " + error.message)
-          setSyncing(false)
-          return
-        }
-
-        try {
-          await uploadPhotosForEntry(data.id)
-        } catch {
-          setSyncText("Photo upload error")
-          setSyncing(false)
-          return
-        }
-
-        const nextEntries: Entry[] = [
-          ...visibleEntries,
-          {
-            id: data.id,
-            date: currentDate,
-            ...newEntry,
-            syncStatus: "synced",
-          },
-        ]
-
-        updateVisibleEntries(nextEntries)
-        localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
-      }
-
-      setSyncText("Synced")
-      setSyncing(false)
-    } else {
-      let nextEntries: Entry[]
-
-      if (editingId) {
-        nextEntries = visibleEntries.map((entry) =>
-          entry.id === editingId
-            ? { ...entry, ...newEntry, date: entryDate, syncStatus: "pending" as const }
-            : entry
-        )
-      } else {
-        nextEntries = [
-          ...visibleEntries,
+  const nextEntries: Entry[] = savedEditingId
+    ? visibleEntries.map((entry) =>
+        entry.id === savedEditingId
+          ? {
+              ...entry,
+              ...savedNewEntry,
+              date: entryDate,
+              syncStatus: "pending" as const,
+            }
+          : entry
+      )
+    : [
+        ...visibleEntries,
         {
-  id: Date.now(),
-  date: currentDate,
-  ...newEntry,
-  localPhotos,
-  syncStatus: "pending",
-},
-        ]
+          id: localId,
+          date: entryDate,
+          ...savedNewEntry,
+          localPhotos: [],
+          syncStatus: "pending",
+        },
+      ]
+
+  updateVisibleEntries(nextEntries)
+  localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+
+  setShowModal(false)
+  setEditingId(null)
+  clearPhotos()
+  setSaving(false)
+
+  setNewEntry({
+    trailer: "",
+    from: "CnM",
+    to: "Stena",
+    status: "L",
+    note: "",
+  })
+
+  setSyncText("Syncing...")
+  setSyncing(true)
+
+  setTimeout(async () => {
+    try {
+      const localPhotos = await filesToBase64(savedPhotoFiles)
+
+      const withPhotos = loadFromStorage<Entry[]>(entriesStorageKey, []).map((entry) =>
+        entry.id === localId
+          ? { ...entry, localPhotos, syncStatus: "pending" as const }
+          : entry
+      )
+
+      setEntries(withPhotos)
+      localStorage.setItem(entriesStorageKey, JSON.stringify(withPhotos))
+
+      if (navigator.onLine && screen === "main") {
+        await syncEntries()
+      } else {
+        setSyncText("Saved offline. Will sync later.")
+        setSyncing(false)
       }
-
-      updateVisibleEntries(nextEntries)
-      localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+    } catch (error) {
+      console.log("BACKGROUND SAVE ERROR:", error)
+      setSyncText("Photo prepare error")
+      setSyncing(false)
     }
-
-    setShowModal(false)
-    setEditingId(null)
-    clearPhotos()
-   setSaving(false)
-
-    setNewEntry({
-      trailer: "",
-      from: "CnM",
-      to: "Stena",
-      status: "L",
-      note: "",
-    })
-  }
+  }, 100)
+}
 
   const deleteEntry = async (entryToDelete: Entry) => {
     const confirmed = confirm("Delete this entry?")
