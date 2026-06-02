@@ -138,6 +138,11 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
 
   const [menuEntry, setMenuEntry] = useState<Entry | null>(null)
+
+const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
+const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
+const [longPressActive, setLongPressActive] = useState(false)
+
   const [showMainMenu, setShowMainMenu] = useState(false)
 
   const [syncText, setSyncText] = useState("Offline ready")
@@ -582,6 +587,17 @@ if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
     }
   }
 
+const openPreview = async (entry: Entry) => {
+  setPreviewEntry(entry)
+
+  const { data } = await supabase
+    .from("entry_photos")
+    .select("id, entry_id, photo_url, file_path")
+    .eq("entry_id", entry.id)
+
+  setPreviewPhotos(data ?? [])
+}
+
   const openEdit = (entry: Entry) => {
     clearPhotos()
     setEditingId(entry.id)
@@ -920,6 +936,11 @@ setSaving(true)
                 {dayEntries.map((entry) => (
                   <div
                     key={entry.id}
+                    onClick={() => {
+  if (!longPressActive) {
+    openPreview(entry)
+  }
+}}
                     onTouchStart={() => {
                       const timer = setTimeout(() => {
                         setMenuEntry(entry)
@@ -1053,6 +1074,58 @@ setSaving(true)
           </div>
         </div>
       )}
+
+      {previewEntry && (
+  <div
+    onClick={() => {
+      setPreviewEntry(null)
+      setPreviewPhotos([])
+    }}
+    className="fixed inset-0 z-[55] bg-black/50 flex items-center justify-center"
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="w-[340px] bg-white rounded-[20px] p-4"
+    >
+      <h3 className="text-center text-[20px] font-bold mb-3">
+        {previewEntry.trailer}
+      </h3>
+
+      <p className="text-center mb-2">
+        {previewEntry.from} → {previewEntry.to}
+      </p>
+
+      <p className="text-center mb-2">
+        Status: {previewEntry.status}
+      </p>
+
+      <p className="text-center text-zinc-500 mb-4">
+        {previewEntry.note}
+      </p>
+
+      <div className="flex gap-2 overflow-x-auto">
+        {previewPhotos.map((photo) => (
+          <img
+            key={photo.id}
+            src={photo.photo_url}
+            onClick={() => setSelectedPhoto(photo.photo_url)}
+            className="w-[90px] h-[90px] rounded-[12px] object-cover"
+          />
+        ))}
+      </div>
+
+      <button
+        onClick={() => {
+          setPreviewEntry(null)
+          setPreviewPhotos([])
+        }}
+        className="w-full h-[46px] mt-4 rounded-[16px] bg-blue-500 text-white font-bold"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
 
       {menuEntry && (
         <div
