@@ -117,6 +117,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 export default function DriverApp({ driverId, driverName, onBack }: DriverAppProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+ 
   const [saving, setSaving] = useState(false)
 
   const entriesStorageKey = `oneill-entries-${driverId}`
@@ -474,12 +475,13 @@ if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
 
 useLayoutEffect(() => {
   if (screen === "archives") return
+  if (visibleEntries.length === 0) return
 
   const el = listRef.current
   if (!el) return
 
   el.scrollTop = el.scrollHeight
-}, [screen, activeArchiveId])
+}, [screen, visibleEntries.length])
 
   const groupedEntries = visibleEntries.reduce((groups, entry) => {
     if (!groups[entry.date]) groups[entry.date] = []
@@ -891,7 +893,10 @@ const saveEntry = async () => {
           </div>
         </div>
       ) : (
-        <div ref={listRef} className="flex-1 min-h-0 px-3 overflow-y-auto">
+        <div
+  ref={listRef}
+className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
+>
           {Object.entries(groupedEntries).map(([date, dayEntries]) => (
             <div key={date}>
             <p className="text-center text-[12px] font-semibold text-zinc-400">
