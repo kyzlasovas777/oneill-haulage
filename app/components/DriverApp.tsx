@@ -57,6 +57,27 @@ function formatEntryDate(date: Date) {
   return `${year}.${month}.${day}`
 }
 
+function formatDisplayDate(dateText: string) {
+  const [year, month, day] = dateText.split(".").map(Number)
+
+  const date = new Date(year, month - 1, day)
+
+  const weekday = date.toLocaleDateString("en-GB", {
+    weekday: "long",
+  })
+
+  return `${weekday} ${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.${year}`
+}
+
+function formatWeekTitle(weekTitle: string) {
+  const [start, end] = weekTitle.split(" - ")
+
+  const [startMonth, startDay] = start.split(".")
+  const [endMonth, endDay] = end.split(".")
+
+  return `${startDay}.${startMonth} - ${endDay}.${endMonth}`
+}
+
 function getWeekTitleFromEntryDate(dateText: string) {
   const [year, month, day] = dateText.split(".").map(Number)
  const date = new Date(year, month - 1, day)
@@ -69,7 +90,7 @@ date.setHours(12, 0, 0, 0)
   const formatShort = (date: Date) => {
     const month = String(date.getMonth() + 1).padStart(2, "0")
     const day = String(date.getDate()).padStart(2, "0")
-    return `${month}.${day}`
+  return `${month}.${day}`
   }
 
   return `${formatShort(monday)} - ${formatShort(sunday)}`
@@ -115,6 +136,8 @@ export default function DriverApp({ driverId, driverName, onBack }: DriverAppPro
   }
 
   const currentWeekTitle = `${formatShort(monday)} - ${formatShort(sunday)}`
+const displayWeekTitle = formatWeekTitle(currentWeekTitle)
+
   const currentDate = formatEntryDate(today)
 
   const [entries, setEntries] = useState<Entry[]>(() =>
@@ -200,7 +223,7 @@ const [longPressActive, setLongPressActive] = useState(false)
       : entries.filter((entry) => entry.syncStatus !== "delete_pending")
 
   const visibleTitle =
-    screen === "archive" && activeArchive ? activeArchive.title : currentWeekTitle
+  screen === "archive" && activeArchive ? activeArchive.title : displayWeekTitle
 
     const uploadLocalPhotosForEntry = async (entryId: number, localPhotos?: string[]) => {
   if (!localPhotos || localPhotos.length === 0) return
@@ -873,9 +896,9 @@ const saveEntry = async () => {
         <div ref={listRef} className="flex-1 min-h-0 px-3 overflow-y-auto">
           {Object.entries(groupedEntries).map(([date, dayEntries]) => (
             <div key={date}>
-              <p className="text-center text-[12px] font-semibold text-zinc-400 mt-3 mb-1">
-                {date}
-              </p>
+            <p className="text-center text-[12px] font-semibold text-zinc-400">
+  {formatDisplayDate(date)}
+</p>
 
               <div className="space-y-1">
                 {dayEntries.map((entry) => (
