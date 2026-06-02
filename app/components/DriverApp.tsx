@@ -472,16 +472,14 @@ if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
     }
   }, [activeWeekStorageKey, currentWeekTitle, entries])
 
-  useLayoutEffect(() => {
-    if (screen === "archives") return
+useLayoutEffect(() => {
+  if (screen === "archives") return
 
-    const el = listRef.current
-    if (!el) return
+  const el = listRef.current
+  if (!el) return
 
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight
-    })
-  }, [visibleEntries.length, screen])
+  el.scrollTop = el.scrollHeight
+}, [screen, activeArchiveId])
 
   const groupedEntries = visibleEntries.reduce((groups, entry) => {
     if (!groups[entry.date]) groups[entry.date] = []
@@ -818,7 +816,7 @@ const saveEntry = async () => {
   }
 
   return (
-    <main className="min-h-screen bg-[#efeff4] flex flex-col w-full">
+   <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
       <div className="px-4 pt-6 pb-1">
         <div className="flex items-center justify-between">
           <button
