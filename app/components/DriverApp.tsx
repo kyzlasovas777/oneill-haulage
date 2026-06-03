@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
+import MilesPage from "./MilesPage"
+import DieselPage from "./DieselPage"
 
 type Entry = {
   id: number
@@ -149,7 +151,14 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
     loadFromStorage<WeekArchive[]>(archivesStorageKey, [])
   )
 
-  const [screen, setScreen] = useState<"main" | "archives" | "archive">("main")
+ const [screen, setScreen] = useState<
+  "main" |
+  "archives" |
+  "archive" |
+  "miles" |
+  "diesel"
+>("main")
+
   const [activeArchiveId, setActiveArchiveId] = useState<number | null>(null)
 
   const [showModal, setShowModal] = useState(false)
@@ -861,6 +870,14 @@ const saveEntry = async () => {
             </p>
           </div>
 
+ {screen === "miles" && (
+  <MilesPage onBack={() => setScreen("main")} />
+)}
+
+{screen === "diesel" && (
+  <DieselPage onBack={() => setScreen("main")} />
+)}
+
           {screen === "main" ? (
             <button
               onClick={() => setShowMainMenu(true)}
@@ -1028,7 +1045,28 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
               Add Place
             </button>
 
-         
+     <button
+  onClick={() => {
+    setScreen("miles")
+    setShowMainMenu(false)
+  }}
+  className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px]"
+>
+  <span>🛣️</span>
+  Miles
+</button>
+
+<button
+  onClick={() => {
+    setScreen("diesel")
+    setShowMainMenu(false)
+  }}
+  className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px]"
+>
+  <span>⛽</span>
+  Diesel
+</button>
+
           </div>
         </div>
       )}
