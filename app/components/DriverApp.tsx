@@ -1085,15 +1085,41 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
         ))}
       </div>
 
-      <button
-        onClick={() => {
-          setPreviewEntry(null)
-          setPreviewPhotos([])
-        }}
-        className="w-full h-[46px] mt-4 rounded-[16px] bg-blue-500 text-white font-bold"
-      >
-        Close
-      </button>
+    <div className="flex gap-2 mt-4">
+  <button
+    onClick={() => {
+      openEdit(previewEntry!)
+      setPreviewEntry(null)
+      setPreviewPhotos([])
+    }}
+    className="flex-1 h-[46px] rounded-[16px] bg-blue-500 text-white font-bold"
+  >
+    Edit
+  </button>
+
+  {previewEntry?.id === visibleEntries[visibleEntries.length - 1]?.id && (
+    <button
+   onClick={() => {
+  deleteEntry(previewEntry!)
+  setPreviewEntry(null)
+  setPreviewPhotos([])
+}}
+      className="flex-1 h-[46px] rounded-[16px] bg-red-500 text-white font-bold"
+    >
+      Delete
+    </button>
+  )}
+
+  <button
+    onClick={() => {
+      setPreviewEntry(null)
+      setPreviewPhotos([])
+    }}
+    className="flex-1 h-[46px] rounded-[16px] bg-zinc-200 text-black font-bold"
+  >
+    Close
+  </button>
+</div>
     </div>
   </div>
 )}
