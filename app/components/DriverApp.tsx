@@ -161,11 +161,9 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
 
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
 
-  const [menuEntry, setMenuEntry] = useState<Entry | null>(null)
-
 const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
 const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
-const [longPressActive, setLongPressActive] = useState(false)
+
 
   const [showMainMenu, setShowMainMenu] = useState(false)
 
@@ -639,7 +637,7 @@ const openPreview = async (entry: Entry) => {
   loadEntryPhotos(entry.id)
 }
 
-    setMenuEntry(null)
+   
     setShowModal(true)
   }
 
@@ -810,8 +808,6 @@ const saveEntry = async () => {
     updateVisibleEntries(nextEntries)
     localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
 
-    setMenuEntry(null)
-
     setTimeout(() => {
       if (navigator.onLine) syncEntries()
     }, 300)
@@ -907,25 +903,8 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                 {dayEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    onClick={() => {
-  if (!longPressActive) {
-    openPreview(entry)
-  }
-}}
-                    onTouchStart={() => {
-                      const timer = setTimeout(() => {
-                        setMenuEntry(entry)
-                      }, 600)
-                      ;(window as any).longPressTimer = timer
-                    }}
-                    onTouchEnd={() => clearTimeout((window as any).longPressTimer)}
-                    onMouseDown={() => {
-                      const timer = setTimeout(() => {
-                        setMenuEntry(entry)
-                      }, 600)
-                      ;(window as any).longPressTimer = timer
-                    }}
-                    onMouseUp={() => clearTimeout((window as any).longPressTimer)}
+  onClick={() => openPreview(entry)}
+                   
                     className="select-none bg-white rounded-[14px] h-[34px] px-3 flex items-center active:scale-[0.98] transition-all"
                   >
                     <div className="w-[72px] shrink-0">
@@ -1124,40 +1103,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   </div>
 )}
 
-      {menuEntry && (
-        <div
-          onClick={() => setMenuEntry(null)}
-          className="fixed inset-0 z-[60] bg-black/20 flex items-center justify-center"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-[260px] bg-white rounded-[20px] overflow-hidden"
-          >
-            <button
-              onClick={() => openEdit(menuEntry)}
-              className="w-full h-[52px] text-blue-500 text-[18px] font-semibold border-b"
-            >
-              Edit
-            </button>
 
-            {menuEntry.id === visibleEntries[visibleEntries.length - 1]?.id && (
-              <button
-                onClick={() => deleteEntry(menuEntry)}
-                className="w-full h-[52px] text-red-500 text-[18px] font-semibold"
-              >
-                Delete
-              </button>
-            )}
-
-            <button
-              onClick={() => setMenuEntry(null)}
-              className="w-full h-[52px] text-zinc-500 text-[18px] font-semibold border-t"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {showPlaceModal && (
        <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
