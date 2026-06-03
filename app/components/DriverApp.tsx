@@ -326,9 +326,26 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
             return
           }
 
-          const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-            item.id === entry.id ? { ...item, syncStatus: "synced" as const } : item
-          )
+          if (entry.localPhotos && entry.localPhotos.length > 0) {
+  try {
+    await uploadLocalPhotosForEntry(entry.id, entry.localPhotos)
+  } catch (photoError) {
+    console.log("PHOTO UPDATE ERROR:", photoError)
+    setSyncText("Photo sync error")
+    setSyncing(false)
+    return
+  }
+}
+
+        const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
+  item.id === entry.id
+    ? {
+        ...item,
+        localPhotos: [],
+        syncStatus: "synced" as const,
+      }
+    : item
+)
 
           setEntries(updated)
           localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
