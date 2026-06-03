@@ -1025,7 +1025,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
               className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px] text-black"
             >
               <span>＋</span>
-              Add New Place
+              Add Place
             </button>
 
          
@@ -1120,7 +1120,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
     <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
       <h2 className="text-center text-[24px] font-bold text-black mb-5">
-        Add New Place
+        Add Place
       </h2>
 
       <input
