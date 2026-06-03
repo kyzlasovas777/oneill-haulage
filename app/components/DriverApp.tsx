@@ -173,9 +173,7 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
   const [showPlaceModal, setShowPlaceModal] = useState(false)
   const [newPlace, setNewPlace] = useState("")
 
-  const [showEditPlacesModal, setShowEditPlacesModal] = useState(false)
-  const [editingPlaceIndex, setEditingPlaceIndex] = useState<number | null>(null)
-  const [editingPlaceName, setEditingPlaceName] = useState("")
+
 
   const [places, setPlaces] = useState([
     "CnM",
@@ -192,11 +190,11 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
     "Irish Ferry",
     "An Post",
     "DFDS Belfast",
-    "Belfast",
+    "Belfast Stena",
     "Tesco Ballymun",
     "Turkeys Grove",
     "Musgrave",
-    "Sam Dennigans",
+    "Sam Dennigan",
     "Belfast Stena Storage",
     "Drogheda",
     "Primeline",
@@ -1030,16 +1028,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
               Add New Place
             </button>
 
-            <button
-              onClick={() => {
-                setShowMainMenu(false)
-                setShowEditPlacesModal(true)
-              }}
-              className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px] text-black"
-            >
-              <span>✎</span>
-              Edit Places
-            </button>
+         
           </div>
         </div>
       )}
@@ -1118,165 +1107,63 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
       setPreviewPhotos([])
     }}
     className="flex-1 h-[46px] rounded-[16px] bg-zinc-200 text-black font-bold"
-  >
-    Close
-  </button>
+ 
+>
+  Close
+</button>
 </div>
+</div>
+</div>
+)}
+
+   {showPlaceModal && (
+  <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
+    <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
+      <h2 className="text-center text-[24px] font-bold text-black mb-5">
+        Add New Place
+      </h2>
+
+      <input
+        placeholder="Place name"
+        value={newPlace}
+        onChange={(e) => setNewPlace(e.target.value)}
+        className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-3"
+      />
+
+      <button
+        onClick={() => {
+          const cleanPlace = newPlace.trim()
+          if (!cleanPlace) return
+
+          setPlaces((prevPlaces) => [
+            cleanPlace,
+            ...prevPlaces.filter(
+              (place) => place.toLowerCase() !== cleanPlace.toLowerCase()
+            ),
+          ])
+
+          setNewPlace("")
+          setShowPlaceModal(false)
+        }}
+        className="w-full h-[50px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold active:scale-[0.98]"
+      >
+        Add Place
+      </button>
+
+      <button
+        onClick={() => {
+          setNewPlace("")
+          setShowPlaceModal(false)
+        }}
+        className="w-full h-[46px] mt-2 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
+      >
+        Cancel
+      </button>
     </div>
   </div>
 )}
 
-
-
-      {showPlaceModal && (
-       <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
-          <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
-            <h2 className="text-center text-[24px] font-bold text-black mb-5">
-              Add New Place
-            </h2>
-
-            <input
-              placeholder="Place name"
-              value={newPlace}
-              onChange={(e) => setNewPlace(e.target.value)}
-              className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-3"
-            />
-
-            <button
-              onClick={() => {
-                const cleanPlace = newPlace.trim()
-                if (!cleanPlace) return
-
-                setPlaces((prevPlaces) => [
-                  cleanPlace,
-                  ...prevPlaces.filter(
-                    (place) => place.toLowerCase() !== cleanPlace.toLowerCase()
-                  ),
-                ])
-
-                setNewPlace("")
-                setShowPlaceModal(false)
-              }}
-              className="w-full h-[50px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold active:scale-[0.98]"
-            >
-              Save Place
-            </button>
-
-            <button
-              onClick={() => {
-                setNewPlace("")
-                setShowPlaceModal(false)
-              }}
-              className="w-full h-[46px] mt-2 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showEditPlacesModal && (
-        <div className="fixed inset-0 bg-black/20 z-[85] flex items-end justify-center">
-          <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6 max-h-[85vh] overflow-y-auto">
-            <h2 className="text-center text-[24px] font-bold text-black mb-5">
-              Edit Places
-            </h2>
-
-            <div className="space-y-2">
-              {places.map((place, index) => (
-                <div
-                  key={`${place}-${index}`}
-                  className="bg-white rounded-[16px] px-3 py-2 flex items-center gap-2"
-                >
-                  {editingPlaceIndex === index ? (
-                    <input
-                      value={editingPlaceName}
-                      onChange={(e) => setEditingPlaceName(e.target.value)}
-                      className="flex-1 h-[40px] rounded-[14px] bg-[#dfdfe4] px-3 text-[16px] outline-none"
-                    />
-                  ) : (
-                    <span className="flex-1 text-[17px] text-black truncate">
-                      {place}
-                    </span>
-                  )}
-
-                  {editingPlaceIndex === index ? (
-                    <button
-                      onClick={() => {
-                        const cleanName = editingPlaceName.trim()
-                        if (!cleanName) return
-
-                        setPlaces((prevPlaces) =>
-                          prevPlaces.map((oldPlace, oldIndex) =>
-                            oldIndex === index ? cleanName : oldPlace
-                          )
-                        )
-
-                        setNewEntry((prev) => ({
-                          ...prev,
-                          from: prev.from === place ? cleanName : prev.from,
-                          to: prev.to === place ? cleanName : prev.to,
-                        }))
-
-                        setEditingPlaceIndex(null)
-                        setEditingPlaceName("")
-                      }}
-                      className="px-3 h-[36px] rounded-[12px] bg-blue-500 text-white text-[14px] font-bold"
-                    >
-                      Save
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingPlaceIndex(index)
-                        setEditingPlaceName(place)
-                      }}
-                      className="px-3 h-[36px] rounded-[12px] bg-blue-500 text-white text-[14px] font-bold"
-                    >
-                      Edit
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      const confirmed = confirm(`Delete "${place}"?`)
-                      if (!confirmed) return
-
-                      setPlaces((prevPlaces) =>
-                        prevPlaces.filter((_, oldIndex) => oldIndex !== index)
-                      )
-
-                      if (newEntry.from === place || newEntry.to === place) {
-                        setNewEntry((prev) => ({
-                          ...prev,
-                          from: prev.from === place ? "CnM" : prev.from,
-                          to: prev.to === place ? "Stena" : prev.to,
-                        }))
-                      }
-                    }}
-                    className="px-3 h-[36px] rounded-[12px] bg-red-500 text-white text-[14px] font-bold"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingPlaceIndex(null)
-                setEditingPlaceName("")
-                setShowEditPlacesModal(false)
-              }}
-              className="w-full h-[46px] mt-4 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showModal && (
+{showModal && (
       <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
        <div className="w-full max-w-[430px] max-h-[100vh] bg-[#efeff4] rounded-t-[34px] px-4 pt-[52px] pb-6 overflow-y-auto">
             <h2 className="text-center text-[20px] font-bold text-black mb-2">
