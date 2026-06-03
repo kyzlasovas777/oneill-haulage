@@ -620,26 +620,28 @@ const openPreview = async (entry: Entry) => {
 }
 
   const openEdit = (entry: Entry) => {
-    clearPhotos()
-    setEditingId(entry.id)
+  setPhotoFiles([])
+  setPhotoPreviews([])
+  setSavedPhotos([])
 
-    setNewEntry({
-      trailer: entry.trailer,
-      from: entry.from,
-      to: entry.to,
-      status: entry.status,
-      note: entry.note,
-    })
+  setEditingId(entry.id)
 
-   if (entry.localPhotos && entry.localPhotos.length > 0) {
-  setPhotoPreviews(entry.localPhotos)
-} else {
-  loadEntryPhotos(entry.id)
-}
+  setNewEntry({
+    trailer: entry.trailer,
+    from: entry.from,
+    to: entry.to,
+    status: entry.status,
+    note: entry.note,
+  })
 
-   
-    setShowModal(true)
+  if (entry.localPhotos && entry.localPhotos.length > 0) {
+    setPhotoPreviews(entry.localPhotos)
+  } else {
+    loadEntryPhotos(entry.id)
   }
+
+  setShowModal(true)
+}
 
   const saveUsedPlacesToTop = () => {
     setPlaces((prevPlaces) => {
@@ -1066,11 +1068,15 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 
     <div className="flex gap-2 mt-4">
   <button
-    onClick={() => {
-      openEdit(previewEntry!)
-      setPreviewEntry(null)
-      setPreviewPhotos([])
-    }}
+   onClick={() => {
+  const entry = previewEntry
+  if (!entry) return
+
+  setPreviewEntry(null)
+  setPreviewPhotos([])
+
+  openEdit(entry)
+}}
     className="flex-1 h-[46px] rounded-[16px] bg-blue-500 text-white font-bold"
   >
     Edit
