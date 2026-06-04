@@ -1293,6 +1293,15 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
             />
 
           <div className="w-full flex gap-3 mb-1">
+
+
+  <button
+    type="button"
+    className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center"
+  >
+    Reg Number ˅
+  </button>
+
   <label className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center">
     + Add Photo
 
@@ -1317,12 +1326,6 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     />
   </label>
 
-  <button
-    type="button"
-    className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center"
-  >
-    Reg Number ˅
-  </button>
 </div>
 
             {savedPhotos.map((item) => (
