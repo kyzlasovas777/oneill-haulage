@@ -4,7 +4,7 @@ type TrucksManagerProps = {
   onClose: () => void
 }
 
-export function TrucksManager({ onClose }: TrucksManagerProps) {
+export default function TrucksManager({ onClose }: TrucksManagerProps) {
 return (
   <div className="fixed inset-0 bg-black/20 z-[90] flex items-center justify-center px-4">
     <div className="w-full max-w-[360px] bg-[#efeff4] rounded-[30px] px-4 pt-6 pb-5 shadow-xl">
