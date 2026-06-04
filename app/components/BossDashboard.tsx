@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
+import TrucksManager from "./TrucksManager"
 
 type Driver = {
   id: number
@@ -81,8 +82,11 @@ export default function BossDashboard({
   const [syncing, setSyncing] = useState(false)
 
   const [showBossMenu, setShowBossMenu] = useState(false)
-
+  const [showTrucks, setShowTrucks] = useState(false)
+  
   const saveDriversLocal = (nextDrivers: Driver[]) => {
+
+
     const sorted = sortDrivers(nextDrivers)
     setDrivers(sorted)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted))
@@ -401,16 +405,22 @@ export default function BossDashboard({
       onClick={(e) => e.stopPropagation()}
     >
       <button
-        onClick={() => {
-          setShowBossMenu(false)
-          alert("Trucks coming soon")
-        }}
+     onClick={() => {
+  setShowBossMenu(false)
+  setShowTrucks(true)
+}}
         className="w-full h-[44px] rounded-[14px] text-black text-[17px] font-bold"
       >
         Trucks
       </button>
     </div>
   </div>
+)}
+
+{showTrucks && (
+  <TrucksManager
+    onClose={() => setShowTrucks(false)}
+  />
 )}
 
       {showAddDriver && (
