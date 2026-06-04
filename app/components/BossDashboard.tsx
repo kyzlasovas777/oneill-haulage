@@ -80,6 +80,8 @@ export default function BossDashboard({
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
 
+  const [showBossMenu, setShowBossMenu] = useState(false)
+
   const saveDriversLocal = (nextDrivers: Driver[]) => {
     const sorted = sortDrivers(nextDrivers)
     setDrivers(sorted)
@@ -318,13 +320,12 @@ export default function BossDashboard({
         </button>
 
         <h1 className="text-[24px] font-black text-black">Boss Dashboard</h1>
-
-        <button
-          onClick={syncDrivers}
-          className="text-blue-500 text-[15px] font-bold"
-        >
-          Sync
-        </button>
+<button
+  onClick={() => setShowBossMenu(true)}
+  className="text-blue-500 text-[28px] font-black leading-none"
+>
+  ☰
+</button>
       </div>
 
       <p className="text-center text-[13px] text-zinc-400 mb-4">
@@ -390,6 +391,28 @@ export default function BossDashboard({
         </button>
       </div>
 
+  {showBossMenu && (
+  <div
+    className="fixed inset-0 z-[80]"
+    onClick={() => setShowBossMenu(false)}
+  >
+    <div
+      className="absolute top-[62px] right-4 w-[170px] rounded-[18px] bg-white shadow-xl p-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => {
+          setShowBossMenu(false)
+          alert("Trucks coming soon")
+        }}
+        className="w-full h-[44px] rounded-[14px] text-black text-[17px] font-bold"
+      >
+        Trucks
+      </button>
+    </div>
+  </div>
+)}
+
       {showAddDriver && (
         <div className="fixed inset-0 bg-black/20 z-[90] flex items-end justify-center">
           <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
@@ -440,3 +463,4 @@ export default function BossDashboard({
     </main>
   )
 }
+

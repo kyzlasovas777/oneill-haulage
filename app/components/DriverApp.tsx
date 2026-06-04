@@ -1292,29 +1292,38 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
               className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
             />
 
-            <label className="w-full h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 mb-1 flex items-center justify-center">
-              + Add Photo
+          <div className="w-full flex gap-3 mb-1">
+  <label className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center">
+    + Add Photo
 
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? [])
-                  if (files.length === 0) return
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      multiple
+      className="hidden"
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? [])
+        if (files.length === 0) return
 
-                  setPhotoFiles((prev) => [...prev, ...files])
-                  setPhotoPreviews((prev) => [
-                    ...prev,
-                    ...files.map((file) => URL.createObjectURL(file)),
-                  ])
+        setPhotoFiles((prev) => [...prev, ...files])
+        setPhotoPreviews((prev) => [
+          ...prev,
+          ...files.map((file) => URL.createObjectURL(file)),
+        ])
 
-                  e.target.value = ""
-                }}
-              />
-            </label>
+        e.target.value = ""
+      }}
+    />
+  </label>
+
+  <button
+    type="button"
+    className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center"
+  >
+    Reg Number ˅
+  </button>
+</div>
 
             {savedPhotos.map((item) => (
             <img
