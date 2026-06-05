@@ -179,6 +179,14 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
 
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
+  const [driverTruck, setDriverTruck] = useState("")
+
+  useEffect(() => {
+  setNewEntry((prev) => ({
+    ...prev,
+    regNumber: driverTruck,
+  }))
+}, [driverTruck])
 
   const [showPlaceModal, setShowPlaceModal] = useState(false)
   const [newPlace, setNewPlace] = useState("")
@@ -217,7 +225,7 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
 
 const [newEntry, setNewEntry] = useState({
   trailer: "",
-  regNumber: "",
+  regNumber: driverTruck,
   from: "CnM",
   to: "Stena",
   status: "L",
@@ -263,6 +271,16 @@ const [newEntry, setNewEntry] = useState({
 
     if (photoInsertError) throw photoInsertError
   }
+}
+
+const loadDriverTruck = async () => {
+  const { data } = await supabase
+    .from("drivers")
+    .select("truck_reg")
+    .eq("id", driverId)
+    .single()
+
+  setDriverTruck(data?.truck_reg ?? "")
 }
 
   const syncEntries = async () => {
@@ -458,6 +476,7 @@ const [newEntry, setNewEntry] = useState({
 
   useEffect(() => {
     loadEntriesFromSupabase()
+    loadDriverTruck()
 
     const handleOnline = () => {
       syncEntries()

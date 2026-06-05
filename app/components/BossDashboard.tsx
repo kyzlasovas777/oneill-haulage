@@ -8,6 +8,7 @@ type Driver = {
   id: number
   name: string
   pin: string
+  truckReg?: string
   active?: boolean
   syncStatus?: "synced" | "pending"
 }
@@ -78,6 +79,20 @@ export default function BossDashboard({
   const [editingDriverId, setEditingDriverId] = useState<number | null>(null)
   const [driverName, setDriverName] = useState("")
   const [driverPin, setDriverPin] = useState("")
+const [driverTruck, setDriverTruck] = useState("")
+
+const [trucks, setTrucks] = useState<string[]>([])
+
+const loadTrucks = async () => {
+  const { data } = await supabase
+    .from("trucks")
+    .select("reg")
+    .eq("active", true)
+    .order("reg")
+
+  setTrucks((data ?? []).map((t) => t.reg))
+}
+
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
 
@@ -105,12 +120,13 @@ export default function BossDashboard({
         if (isLocalOnly) {
           const { data, error } = await supabase
             .from("drivers")
-            .insert({
-              name: driver.name,
-              pin: driver.pin,
-              active: driver.active !== false,
-            })
-            .select("id, name, pin, active")
+          .insert({
+  name: driver.name,
+  pin: driver.pin,
+  truck_reg: driver.truckReg ?? "",
+  active: driver.active !== false,
+})
+.select("id, name, pin, active, truck_reg")
             .single()
 
           if (error) {
@@ -122,7 +138,14 @@ export default function BossDashboard({
 
           const updatedDrivers = loadDrivers().map((item) =>
             item.id === driver.id
-              ? { ...data, syncStatus: "synced" as const }
+             ? {
+    id: data.id,
+    name: data.name,
+    pin: data.pin,
+    truckReg: data.truck_reg ?? "",
+    active: data.active,
+    syncStatus: "synced" as const,
+  }
               : item
           )
 
@@ -130,13 +153,14 @@ export default function BossDashboard({
         } else {
           const { data, error } = await supabase
             .from("drivers")
-            .update({
-              name: driver.name,
-              pin: driver.pin,
-              active: driver.active !== false,
-            })
+         .update({
+  name: driver.name,
+  pin: driver.pin,
+  truck_reg: driver.truckReg ?? "",
+  active: driver.active !== false,
+})
             .eq("id", driver.id)
-            .select("id, name, pin, active")
+           .select("id, name, pin, active, truck_reg")
             .single()
 
           if (error) {
@@ -148,7 +172,14 @@ export default function BossDashboard({
 
           const updatedDrivers = loadDrivers().map((item) =>
             item.id === driver.id
-              ? { ...data, syncStatus: "synced" as const }
+           ? {
+    id: data.id,
+    name: data.name,
+    pin: data.pin,
+    truckReg: data.truck_reg ?? "",
+    active: data.active,
+    syncStatus: "synced" as const,
+  }
               : item
           )
 
@@ -163,8 +194,8 @@ export default function BossDashboard({
 
   const loadFromSupabase = async () => {
     const { data, error } = await supabase
-      .from("drivers")
-      .select("id, name, pin, active")
+  .from("drivers")
+  .select("id, name, pin, active, truck_reg")
       .order("active", { ascending: false })
       .order("name", { ascending: true })
 
@@ -178,11 +209,14 @@ export default function BossDashboard({
       (driver) => driver.syncStatus === "pending"
     )
 
-    const remoteDrivers: Driver[] = (data ?? []).map((driver) => ({
-      ...driver,
-      active: driver.active !== false,
-      syncStatus: "synced",
-    }))
+ const remoteDrivers: Driver[] = (data ?? []).map((driver) => ({
+  id: driver.id,
+  name: driver.name,
+  pin: driver.pin,
+  truckReg: driver.truck_reg ?? "",
+  active: driver.active !== false,
+  syncStatus: "synced",
+}))
 
     const mergedDrivers = [...remoteDrivers]
 
@@ -204,6 +238,7 @@ export default function BossDashboard({
 
   useEffect(() => {
     loadFromSupabase()
+    loadTrucks()
 
     const handleOnline = () => {
       syncDrivers()
@@ -216,23 +251,26 @@ export default function BossDashboard({
     }
   }, [])
 
-  const openAddDriver = () => {
-    setEditingDriverId(null)
-    setDriverName("")
-    setDriverPin("")
-    setShowAddDriver(true)
-  }
+const openAddDriver = () => {
+  setEditingDriverId(null)
+  setDriverName("")
+  setDriverPin("")
+  setDriverTruck("")
+  setShowAddDriver(true)
+}
 
-  const openEditDriver = (driver: Driver) => {
-    setEditingDriverId(driver.id)
-    setDriverName(driver.name)
-    setDriverPin(driver.pin)
-    setShowAddDriver(true)
-  }
+const openEditDriver = (driver: Driver) => {
+  setEditingDriverId(driver.id)
+  setDriverName(driver.name)
+  setDriverPin(driver.pin)
+  setDriverTruck(driver.truckReg ?? "")
+  setShowAddDriver(true)
+}
 
   const saveDriver = async () => {
     const cleanName = driverName.trim()
     const cleanPin = driverPin.trim()
+    const cleanTruck = driverTruck.trim()
 
     if (!cleanName) return
 
@@ -253,32 +291,35 @@ export default function BossDashboard({
     if (editingDriverId) {
       const nextDrivers = drivers.map((driver) =>
         driver.id === editingDriverId
-          ? {
-              ...driver,
-              name: cleanName,
-              pin: cleanPin,
-              syncStatus: "pending" as const,
-            }
+         ? {
+    ...driver,
+    name: cleanName,
+    pin: cleanPin,
+    truckReg: cleanTruck,
+    syncStatus: "pending" as const,
+  }
           : driver
       )
 
       saveDriversLocal(nextDrivers)
     } else {
-      const newDriver: Driver = {
-        id: Date.now(),
-        name: cleanName,
-        pin: cleanPin,
-        active: true,
-        syncStatus: "pending",
-      }
+    const newDriver: Driver = {
+  id: Date.now(),
+  name: cleanName,
+  pin: cleanPin,
+  truckReg: cleanTruck,
+  active: true,
+  syncStatus: "pending",
+}
 
       saveDriversLocal([...drivers, newDriver])
     }
 
-    setDriverName("")
-    setDriverPin("")
-    setEditingDriverId(null)
-    setShowAddDriver(false)
+   setDriverName("")
+setDriverPin("")
+setDriverTruck("")
+setEditingDriverId(null)
+setShowAddDriver(false)
 
     if (navigator.onLine) {
       setTimeout(() => {
@@ -448,6 +489,20 @@ export default function BossDashboard({
               }
               className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none mb-3"
             />
+
+            <select
+  value={driverTruck}
+  onChange={(e) => setDriverTruck(e.target.value)}
+  className="w-full h-[50px] rounded-[20px] bg-[#fdfde4] px-5 text-[18px] text-black text-center font-bold mb-3 outline-none"
+>
+  <option value="">No truck assigned</option>
+
+  {trucks.map((truck) => (
+    <option key={truck} value={truck}>
+      {truck}
+    </option>
+  ))}
+</select>
 
             <button
               onClick={saveDriver}
