@@ -1323,11 +1323,12 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 
 
   <button
-    type="button"
-    className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center"
-  >
-    Reg Number ˅
-  </button>
+  type="button"
+  onClick={() => alert(driverTruck)}
+  className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold"
+>
+  {driverTruck || "Reg Number"} v
+</button>
 
   <label className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center">
     + Add Photo
