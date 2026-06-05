@@ -13,6 +13,7 @@ type Entry = {
   to: string
   status: string
   note: string
+  regNumber?: string
   localPhotos?: string[]
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
@@ -211,15 +212,17 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
     "Golden Bake Dublin",
     "TIP Airport",
     "DFS Dublin",
+    "Smyths Dundalk",
   ])
 
-  const [newEntry, setNewEntry] = useState({
-    trailer: "",
-    from: "CnM",
-    to: "Stena",
-    status: "L",
-    note: "",
-  })
+const [newEntry, setNewEntry] = useState({
+  trailer: "",
+  regNumber: "",
+  from: "CnM",
+  to: "Stena",
+  status: "L",
+  note: "",
+})
 
   const activeArchive = archives.find((archive) => archive.id === activeArchiveId)
 
@@ -316,14 +319,15 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
         } else {
           const { error } = await supabase
             .from("entries")
-            .update({
-              entry_date: entry.date,
-              trailer: entry.trailer,
-              from_place: entry.from,
-              to_place: entry.to,
-              status: entry.status,
-              note: entry.note,
-            })
+           .update({
+  entry_date: entry.date,
+  trailer: entry.trailer,
+  from_place: entry.from,
+  to_place: entry.to,
+  status: entry.status,
+  note: entry.note,
+  reg_number: entry.regNumber ?? "",
+})
             .eq("id", entry.id)
 
           if (error) {
@@ -385,7 +389,7 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
   const loadEntriesFromSupabase = async () => {
     const { data, error } = await supabase
       .from("entries")
-      .select("id, entry_date, trailer, from_place, to_place, status, note")
+     .select("id, entry_date, trailer, from_place, to_place, status, note, reg_number")
       .eq("driver_id", driverId)
       .order("id", { ascending: true })
 
@@ -399,16 +403,17 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
       (entry) => entry.syncStatus === "pending" || entry.syncStatus === "delete_pending"
     )
 
-    const remoteEntries: Entry[] = (data ?? []).map((entry) => ({
-      id: entry.id,
-      date: entry.entry_date,
-      trailer: entry.trailer,
-      from: entry.from_place,
-      to: entry.to_place,
-      status: entry.status,
-      note: entry.note,
-      syncStatus: "synced",
-    }))
+  const remoteEntries: Entry[] = (data ?? []).map((entry) => ({
+  id: entry.id,
+  date: entry.entry_date,
+  trailer: entry.trailer,
+  regNumber: entry.reg_number ?? "",
+  from: entry.from_place,
+  to: entry.to_place,
+  status: entry.status,
+  note: entry.note,
+  syncStatus: "synced",
+}))
 
     const allEntries = [...remoteEntries, ...localPending]
 
@@ -650,13 +655,14 @@ const openPreview = async (entry: Entry) => {
 
   setEditingId(entry.id)
 
-  setNewEntry({
-    trailer: entry.trailer,
-    from: entry.from,
-    to: entry.to,
-    status: entry.status,
-    note: entry.note,
-  })
+setNewEntry({
+  trailer: entry.trailer,
+  regNumber: entry.regNumber ?? "",
+  from: entry.from,
+  to: entry.to,
+  status: entry.status,
+  note: entry.note,
+})
 
   if (entry.localPhotos && entry.localPhotos.length > 0) {
     setPhotoPreviews(entry.localPhotos)
@@ -780,13 +786,14 @@ const saveEntry = async () => {
   clearPhotos()
   setSaving(false)
 
-  setNewEntry({
-    trailer: "",
-    from: "CnM",
-    to: "Stena",
-    status: "L",
-    note: "",
-  })
+setNewEntry({
+  trailer: "",
+  regNumber: "",
+  from: "CnM",
+  to: "Stena",
+  status: "L",
+  note: "",
+})
 
   setSyncText("Syncing...")
   setSyncing(true)
@@ -998,13 +1005,14 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
             onClick={() => {
               setEditingId(null)
               clearPhotos()
-              setNewEntry({
-                trailer: "",
-                from: "CnM",
-                to: "Stena",
-                status: "L",
-                note: "",
-              })
+       setNewEntry({
+  trailer: "",
+  regNumber: "",
+  from: "CnM",
+  to: "Stena",
+  status: "L",
+  note: "",
+})
               setShowModal(true)
             }}
             className="w-full h-[50px] rounded-[18px] bg-blue-500 text-white text-[16px] font-bold active:scale-[0.98] transition-all"
