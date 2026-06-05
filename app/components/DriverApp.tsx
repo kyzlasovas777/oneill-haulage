@@ -180,6 +180,8 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
   const [driverTruck, setDriverTruck] = useState("")
+const [trucks, setTrucks] = useState<string[]>([])
+
 
   useEffect(() => {
   setNewEntry((prev) => ({
@@ -281,6 +283,15 @@ const loadDriverTruck = async () => {
     .single()
 
   setDriverTruck(data?.truck_reg ?? "")
+}
+
+const loadTrucks = async () => {
+  const { data } = await supabase
+    .from("trucks")
+    .select("reg")
+    .order("reg")
+
+  setTrucks((data ?? []).map((truck) => truck.reg))
 }
 
   const syncEntries = async () => {
@@ -478,6 +489,7 @@ const loadDriverTruck = async () => {
   useEffect(() => {
     loadEntriesFromSupabase()
     loadDriverTruck()
+    loadTrucks()
 
     const handleOnline = () => {
       syncEntries()
@@ -1329,14 +1341,24 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
           <div className="w-full flex gap-3 mb-1">
 
 
-  <button
-  type="button"
-  onClick={() => alert(driverTruck)}
-  className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold"
+ <select
+ value={newEntry.regNumber || driverTruck}
+  onChange={(e) =>
+    setNewEntry((prev) => ({
+      ...prev,
+      regNumber: e.target.value,
+    }))
+  }
+  className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-center text-zinc-700 px-3"
 >
-  {driverTruck || "Reg Number"} v
-</button>
+<option value="">Reg Number</option>
 
+{trucks.map((truck) => (
+  <option key={truck} value={truck}>
+    {truck}
+  </option>
+))}
+</select>
   <label className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center">
     + Add Photo
 
