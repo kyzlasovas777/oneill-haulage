@@ -302,6 +302,7 @@ const loadDriverTruck = async () => {
               driver_id: driverId,
               entry_date: entry.date,
               trailer: entry.trailer,
+              reg_number: entry.regNumber ?? driverTruck,
               from_place: entry.from,
               to_place: entry.to,
               status: entry.status,
@@ -782,6 +783,7 @@ const saveEntry = async () => {
               ...entry,
               ...savedNewEntry,
               date: entryDate,
+              regNumber: savedNewEntry.regNumber || driverTruck,
               syncStatus: "pending" as const,
             }
           : entry
@@ -792,6 +794,7 @@ const saveEntry = async () => {
           id: localId,
           date: entryDate,
           ...savedNewEntry,
+          regNumber: savedNewEntry.regNumber || driverTruck,
           localPhotos: [],
           syncStatus: "pending",
         },
@@ -1113,6 +1116,10 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
       <h3 className="text-center text-[20px] font-bold mb-3">
         {previewEntry.trailer}
       </h3>
+
+    <p className="text-center text-[18px] mb-2">
+  Reg: <span className="font-bold">{previewEntry.regNumber}</span>
+</p>
 
       <p className="text-center mb-2">
         {previewEntry.from} → {previewEntry.to}
