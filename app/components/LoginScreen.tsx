@@ -106,9 +106,11 @@ export default function LoginScreen({
         Sign In
       </button>
 
-      <div className="mt-8 w-full max-w-[330px] rounded-[8px] border border-black p-4 text-[18px] text-black">
-        {debug}
-      </div>
+ {debug !== "Waiting..." && debug && (
+  <p className="mt-8 text-center text-[18px] text-zinc-500">
+    {debug}
+  </p>
+)}
     </main>
   )
 }
