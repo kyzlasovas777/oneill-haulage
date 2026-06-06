@@ -82,7 +82,7 @@ export default function LoginScreen({
 }
 
   return (
-    <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
+ <main className="min-h-screen bg-white flex flex-col items-center pt-[120px]">
      
      <img
   src="/icon-512.png"
