@@ -897,7 +897,7 @@ setNewEntry({
             </h1>
 
             {driverName && (
-              <p className="text-[12px] font-bold text-zinc-400">
+              <p className="text-[20px] font-bold text-black">
                 {driverName}
               </p>
             )}
@@ -905,14 +905,19 @@ setNewEntry({
          <p
   className={
     syncText === "Synced" || syncText === "Loaded"
-      ? "text-[11px] font-bold text-green-600"
+      ? "text-[12px] font-bold text-green-600"
       : "text-[11px] font-bold text-zinc-400"
   }
 >
               {syncing
                 ? "🔄 Syncing"
                 : syncText === "Synced" || syncText === "Loaded"
-               ? "✔ Synced"
+              ? (
+  <>
+    <span className="text-green-600">✔</span>
+    <span className="text-black"> Synced</span>
+  </>
+)
                 : "⏳ Offline"}
             </p>
           </div>
