@@ -980,7 +980,7 @@ setNewEntry({
 className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 >
           {Object.entries(groupedEntries).map(([date, dayEntries]) => (
-            <div key={date}>
+          <div key={date} className="mb-3">
            <p className="text-center text-[15px] font-semi-bold text-zinc-500">
   {formatDisplayDate(date)}
 </p>
