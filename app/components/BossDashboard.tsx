@@ -389,11 +389,19 @@ setShowAddDriver(false)
                 isActive ? "bg-white" : "bg-zinc-200 opacity-70"
               }`}
             >
-              <p className="text-[20px] font-bold text-black">
-                {isActive ? "🟢 " : "⚫ "}
-                {driver.name}
-                {driver.syncStatus === "pending" ? " ⏳" : ""}
-              </p>
+            <div className="flex items-center justify-between">
+  <p className="text-[20px] font-bold text-black">
+    {isActive ? "🟢 " : "⚫ "}
+    {driver.name}
+    {driver.syncStatus === "pending" ? " ⏳" : ""}
+  </p>
+
+  {driver.truckReg && (
+  <p className="text-[16px] font-extrabold text-black">
+  {driver.truckReg}
+</p>
+  )}
+</div>
 
               <p className="text-[14px] text-zinc-400">PIN: {driver.pin}</p>
 

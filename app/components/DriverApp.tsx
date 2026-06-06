@@ -902,11 +902,17 @@ setNewEntry({
               </p>
             )}
 
-            <p className="text-[11px] font-bold text-zinc-400">
+         <p
+  className={
+    syncText === "Synced" || syncText === "Loaded"
+      ? "text-[11px] font-bold text-green-600"
+      : "text-[11px] font-bold text-zinc-400"
+  }
+>
               {syncing
                 ? "🔄 Syncing"
                 : syncText === "Synced" || syncText === "Loaded"
-                ? "✅ Synced"
+               ? "✔ Synced"
                 : "⏳ Offline"}
             </p>
           </div>
@@ -1017,11 +1023,11 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                     </div>
 
                     <div className="w-[22px] shrink-0 text-right text-[11px]">
-                      {entry.syncStatus === "pending"
-                        ? "⏳"
-                        : entry.syncStatus === "synced"
-                        ? "✅"
-                        : ""}
+                     {entry.syncStatus === "pending"
+  ? "⌛"
+  : entry.syncStatus === "synced"
+  ? <span className="text-green-600 font-bold">✔</span>
+  : ""}
                     </div>
                   </div>
                 ))}
