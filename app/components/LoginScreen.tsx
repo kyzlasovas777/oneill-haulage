@@ -83,8 +83,15 @@ export default function LoginScreen({
 
   return (
     <main className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
+     
+     <img
+  src="/icon-512.png"
+  alt="O'Neill Haulage"
+  className="w-[320px] mb-4"
+/>
+     
       <h1 className="text-[38px] font-black text-black mb-8">
-        O&apos;Neill Haulage
+      
       </h1>
 
       <input
@@ -95,13 +102,13 @@ export default function LoginScreen({
         }}
         inputMode="numeric"
         placeholder="Driver PIN"
-        className="w-full max-w-[330px] h-[58px] border border-black rounded-[6px] px-5 text-[24px] outline-none mb-6"
+        className="w-full max-w-[330px] h-[58px] border-2 border-green-600 rounded-[6px] px-5 text-[24px] outline-none mb-6"
       />
 
       <button
         type="button"
         onClick={login}
-        className="h-[58px] px-10 rounded-[8px] bg-blue-500 text-white text-[24px]"
+      className="h-[58px] px-10 rounded-[8px] bg-green-600 text-white text-[24px]"
       >
         Sign In
       </button>
