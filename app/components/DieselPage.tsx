@@ -1,3 +1,5 @@
+"use client"
+
 import { useEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 
@@ -33,15 +35,99 @@ function formatEntryDate(date: Date) {
   return `${year}.${month}.${day}`
 }
 
-function displayDate(dateText: string) {
+function parseEntryDate(dateText: string) {
   const [year, month, day] = dateText.split(".").map(Number)
-  const date = new Date(year, month - 1, day)
+  return new Date(year, month - 1, day)
+}
+
+function displayDate(dateText: string) {
+  const date = parseEntryDate(dateText)
 
   return date.toLocaleDateString("en-GB", {
     weekday: "long",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  })
+}
+
+function getWeekStart(date: Date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+
+  d.setDate(d.getDate() + mondayOffset)
+  d.setHours(0, 0, 0, 0)
+
+  return d
+}
+
+function formatShort(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  return `${day}.${month}`
+}
+
+function getWeekTitle(dateText: string) {
+  const date = parseEntryDate(dateText)
+  const monday = getWeekStart(date)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  return `${formatShort(monday)}-${formatShort(sunday)}`
+}
+
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+
+      const maxWidth = 1400
+      const scale = Math.min(1, maxWidth / img.width)
+      const width = Math.round(img.width * scale)
+      const height = Math.round(img.height * scale)
+
+      const canvas = document.createElement("canvas")
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        resolve(file)
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, width, height)
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file)
+            return
+          }
+
+          resolve(
+            new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: "image/jpeg",
+            })
+          )
+        },
+        "image/jpeg",
+        0.65
+      )
+    }
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(file)
+    }
+
+    img.src = url
   })
 }
 
@@ -68,7 +154,11 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
   const editPhotoInputRef = useRef<HTMLInputElement | null>(null)
   const [editingSaving, setEditingSaving] = useState(false)
 
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
+
   const today = formatEntryDate(new Date())
+  const currentWeekTitle = getWeekTitle(today)
 
   const getEntryPhotos = (entryId: number) => {
     return photos.filter((photo) => photo.diesel_entry_id === entryId)
@@ -117,8 +207,6 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     setPhotoPreviews(selectedFiles.map((file) => URL.createObjectURL(file)))
   }
 
-
-
   const chooseEditPhotos = (files: FileList | null) => {
     if (!files) return
 
@@ -130,86 +218,57 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
   }
 
   const removePhoto = (index: number) => {
-  setPhotoFiles((prev) =>
-    prev.filter((_, i) => i !== index)
-  )
+    if (photoPreviews[index]) URL.revokeObjectURL(photoPreviews[index])
 
-  setPhotoPreviews((prev) =>
-    prev.filter((_, i) => i !== index)
-  )
-}
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
+    setPhotoPreviews((prev) => prev.filter((_, i) => i !== index))
 
-const removeEditPhoto = (index: number) => {
-  setEditPhotoFiles((prev) =>
-    prev.filter((_, i) => i !== index)
-  )
-
-  setEditPhotoPreviews((prev) =>
-    prev.filter((_, i) => i !== index)
-  )
-}
-
-const deleteDieselPhoto = async (photo: DieselPhoto) => {
-  const ok = confirm("Delete this photo?")
-  if (!ok) return
-
-  const { error: storageError } = await supabase.storage
-    .from("entry-photos")
-    .remove([photo.photo_path])
-
-  if (storageError) {
-    console.log("DIESEL STORAGE DELETE ERROR:", storageError)
+    if (photoInputRef.current) photoInputRef.current.value = ""
   }
 
-  const { error } = await supabase
-    .from("diesel_photos")
-    .delete()
-    .eq("id", photo.id)
+  const removeEditPhoto = (index: number) => {
+    if (editPhotoPreviews[index]) URL.revokeObjectURL(editPhotoPreviews[index])
 
-  if (error) {
-    console.log("DIESEL PHOTO DELETE ERROR:", error)
-    alert("Photo delete error")
-    return
+    setEditPhotoFiles((prev) => prev.filter((_, i) => i !== index))
+    setEditPhotoPreviews((prev) => prev.filter((_, i) => i !== index))
+
+    if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
-  setPhotos((prev) => prev.filter((item) => item.id !== photo.id))
-}
+  const clearPhotos = () => {
+    photoPreviews.forEach((url) => URL.revokeObjectURL(url))
+    setPhotoFiles([])
+    setPhotoPreviews([])
 
-const clearPhotos = () => {
-  photoPreviews.forEach((url) => URL.revokeObjectURL(url))
-
-  setPhotoFiles([])
-  setPhotoPreviews([])
-
-  if (photoInputRef.current) {
-    photoInputRef.current.value = ""
+    if (photoInputRef.current) photoInputRef.current.value = ""
   }
-}
 
   const clearEditPhotos = () => {
     editPhotoPreviews.forEach((url) => URL.revokeObjectURL(url))
     setEditPhotoFiles([])
     setEditPhotoPreviews([])
+
+    if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
   const uploadPhoto = async (file: File) => {
-    const cleanName = file.name.replaceAll(" ", "-")
+    const compressedFile = await compressImage(file)
+
+    const cleanName = compressedFile.name.replaceAll(" ", "-")
     const filePath = `diesel/${driverId}/${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}-${cleanName}`
 
     const { error } = await supabase.storage
       .from("entry-photos")
-      .upload(filePath, file)
+      .upload(filePath, compressedFile)
 
     if (error) {
       console.log("DIESEL PHOTO UPLOAD ERROR:", error)
       throw error
     }
 
-    const { data } = supabase.storage
-      .from("entry-photos")
-      .getPublicUrl(filePath)
+    const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
 
     return {
       photo_url: data.publicUrl,
@@ -243,9 +302,7 @@ const clearPhotos = () => {
       throw error
     }
 
-    if (data) {
-      setPhotos((prev) => [...data, ...prev])
-    }
+    if (data) setPhotos((prev) => [...data, ...prev])
   }
 
   const openEdit = (entry: DieselEntry) => {
@@ -314,6 +371,7 @@ const clearPhotos = () => {
       setMileage("")
       setLitres("")
       clearPhotos()
+      setAddOpen(false)
     } catch (error) {
       console.log("DIESEL SAVE PHOTO ERROR:", error)
       alert(JSON.stringify(error))
@@ -387,27 +445,78 @@ const clearPhotos = () => {
     setEditingSaving(false)
   }
 
-  const deleteDieselEntry = async (id: number) => {
-  if (!confirm("Delete this diesel entry?")) return
+  const deleteDieselPhoto = async (photo: DieselPhoto) => {
+    if (!confirm("Delete this photo?")) return
 
-  const { error } = await supabase
-    .from("diesel_entries")
-    .delete()
-    .eq("id", id)
+    const { error: storageError } = await supabase.storage
+      .from("entry-photos")
+      .remove([photo.photo_path])
 
-  if (error) {
-    alert("Delete failed")
-    return
+    if (storageError) {
+      console.log("DIESEL STORAGE DELETE ERROR:", storageError)
+    }
+
+    const { error } = await supabase
+      .from("diesel_photos")
+      .delete()
+      .eq("id", photo.id)
+
+    if (error) {
+      alert("Photo delete error")
+      return
+    }
+
+    setPhotos((prev) => prev.filter((item) => item.id !== photo.id))
   }
 
-  setEntries((prev) => prev.filter((entry) => entry.id !== id))
-  closeEdit()
-}
+  const deleteDieselEntry = async (id: number) => {
+    if (!confirm("Delete this diesel entry?")) return
 
-  const weekLitres = entries.reduce(
+    const entryPhotos = getEntryPhotos(id)
+
+    if (entryPhotos.length > 0) {
+      await supabase.storage
+        .from("entry-photos")
+        .remove(entryPhotos.map((photo) => photo.photo_path))
+
+      await supabase.from("diesel_photos").delete().eq("diesel_entry_id", id)
+    }
+
+    const { error } = await supabase.from("diesel_entries").delete().eq("id", id)
+
+    if (error) {
+      alert("Delete failed")
+      return
+    }
+
+    setEntries((prev) => prev.filter((entry) => entry.id !== id))
+    setPhotos((prev) => prev.filter((photo) => photo.diesel_entry_id !== id))
+    closeEdit()
+  }
+
+  const currentWeekEntries = entries.filter(
+    (entry) => getWeekTitle(entry.entry_date) === currentWeekTitle
+  )
+
+  const weekLitres = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.litres ?? 0),
     0
   )
+
+  const archiveWeeks = entries
+    .filter((entry) => getWeekTitle(entry.entry_date) !== currentWeekTitle)
+    .reduce((groups, entry) => {
+      const title = getWeekTitle(entry.entry_date)
+      if (!groups[title]) groups[title] = []
+      groups[title].push(entry)
+      return groups
+    }, {} as Record<string, DieselEntry[]>)
+
+  const archiveTitles = Object.keys(archiveWeeks)
+
+  const visibleArchiveEntries = activeArchiveWeek
+    ? archiveWeeks[activeArchiveWeek] ?? []
+    : []
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
@@ -426,32 +535,36 @@ const clearPhotos = () => {
           </div>
         </div>
 
-        <button className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]">
+        <button
+          onClick={() => {
+            setArchiveOpen(true)
+            setActiveArchiveWeek(null)
+          }}
+          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+        >
           Archive
         </button>
       </div>
 
       <div className="mt-5 space-y-3">
-        {entries.map((entry) => {
+        {currentWeekEntries.map((entry) => {
           const entryPhotos = getEntryPhotos(entry.id)
 
           return (
             <button
               key={entry.id}
               onClick={() => openEdit(entry)}
-              className="w-full text-left bg-white rounded-[18px] p-1 shadow-sm"
+              className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
             >
               <div className="flex items-center justify-between gap-3">
-                <div>
                 <div className="pl-2">
-                    {displayDate(entry.entry_date)}
-                  </div>
+                  <div>{displayDate(entry.entry_date)}</div>
 
-                <div className="pl-2">
+                  <div>
                     Mileage: <b>{entry.mileage ?? "-"}</b>
                   </div>
 
-                <div className="pl-2">
+                  <div>
                     Litres:{" "}
                     <b>
                       {entry.litres === null
@@ -483,19 +596,19 @@ const clearPhotos = () => {
         })}
       </div>
 
-  <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
-  <button
-  onClick={() => {
-  setMileage("")
-  setLitres("")
-  clearPhotos()
-  setAddOpen(true)
-}}
-    className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
-  >
-    + Fill Up Diesel
-  </button>
-</div>
+      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
+        <button
+          onClick={() => {
+            setMileage("")
+            setLitres("")
+            clearPhotos()
+            setAddOpen(true)
+          }}
+          className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
+        >
+          + Fill Up Diesel
+        </button>
+      </div>
 
       {addOpen && (
         <div
@@ -534,7 +647,7 @@ const clearPhotos = () => {
               </button>
 
               {photoPreviews.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto py-1">
+                <div className="flex gap-2 overflow-x-auto pt-3 pb-1">
                   {photoPreviews.map((preview, index) => (
                     <div key={preview} className="relative shrink-0">
                       <img
@@ -550,7 +663,7 @@ const clearPhotos = () => {
                           e.stopPropagation()
                           removePhoto(index)
                         }}
-className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
                       >
                         ×
                       </button>
@@ -584,10 +697,7 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
 
                 <button
                   type="button"
-                  onClick={async () => {
-                    await saveDiesel()
-                    setAddOpen(false)
-                  }}
+                  onClick={saveDiesel}
                   className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
                 >
                   {saving ? "Saving..." : "Save"}
@@ -598,7 +708,7 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
         </div>
       )}
 
-       {editingEntry && (
+      {editingEntry && (
         <div
           onClick={closeEdit}
           className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
@@ -631,13 +741,14 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
               />
 
               <button
+                type="button"
                 onClick={() => editPhotoInputRef.current?.click()}
                 className="w-full h-[42px] rounded-[12px] bg-zinc-200 font-bold text-[15px]"
               >
                 📷 Add Photo
               </button>
 
-             <div className="flex gap-2 overflow-x-auto pt-3 pb-1">
+              <div className="flex gap-2 overflow-x-auto pt-3 pb-1">
                 {getEntryPhotos(editingEntry.id).map((photo) => (
                   <div key={photo.id} className="relative shrink-0">
                     <img
@@ -653,7 +764,7 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
                         e.stopPropagation()
                         deleteDieselPhoto(photo)
                       }}
-                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
                     >
                       ×
                     </button>
@@ -675,23 +786,13 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
                         e.stopPropagation()
                         removeEditPhoto(index)
                       }}
-                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
                     >
                       ×
                     </button>
                   </div>
                 ))}
               </div>
-
-              {editPhotoPreviews.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearEditPhotos}
-                  className="h-[38px] px-4 rounded-[12px] bg-red-100 text-red-700 font-bold"
-                >
-                  Remove New Photos
-                </button>
-              )}
 
               <input
                 ref={editPhotoInputRef}
@@ -718,23 +819,130 @@ className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white tex
                 >
                   {editingSaving ? "Saving..." : "Save"}
                 </button>
-            
-             <button
-              type="button"
-  onClick={() => deleteDieselEntry(editingEntry.id)}
-  className="flex-1 h-[46px] rounded-[14px] bg-red-600 text-white font-bold"
->
-  Delete
-</button>
-             
+
+                <button
+                  type="button"
+                  onClick={() => deleteDieselEntry(editingEntry.id)}
+                  className="flex-1 h-[46px] rounded-[14px] bg-red-600 text-white font-bold"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {archiveOpen && (
+        <div
+          onClick={() => setArchiveOpen(false)}
+          className="fixed inset-0 z-[105] bg-black/40 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[380px] max-h-[85vh] overflow-y-auto bg-white rounded-[22px] p-4"
+          >
+            <h2 className="text-[22px] font-bold mb-3">
+              {activeArchiveWeek ? activeArchiveWeek : "Diesel Archive"}
+            </h2>
+
+            {!activeArchiveWeek && (
+              <div className="space-y-2">
+                {archiveTitles.length === 0 && (
+                  <div className="text-zinc-500">No archived weeks yet</div>
+                )}
+
+                {archiveTitles.map((title) => {
+                  const total = archiveWeeks[title].reduce(
+                    (sum, entry) => sum + (entry.litres ?? 0),
+                    0
+                  )
+
+                  return (
+                    <button
+                      key={title}
+                      onClick={() => setActiveArchiveWeek(title)}
+                      className="w-full bg-zinc-100 rounded-[14px] p-3 text-left"
+                    >
+                      <div className="font-bold">{title}</div>
+                      <div className="text-[14px]">
+                        {archiveWeeks[title].length} entries ·{" "}
+                        {total.toFixed(2)} L
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+{activeArchiveWeek && (
+  <div className="space-y-3">
+    <button
+      onClick={() => setActiveArchiveWeek(null)}
+      className="h-[38px] px-4 rounded-[12px] bg-zinc-200 font-bold mb-2"
+    >
+      Back to weeks
+    </button>
+
+    {visibleArchiveEntries.map((entry) => {
+      const entryPhotos = getEntryPhotos(entry.id)
+
+      return (
+        <button
+          key={entry.id}
+          onClick={() => {
+            setArchiveOpen(false)
+            openEdit(entry)
+          }}
+          className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="pl-2">
+              <div>{displayDate(entry.entry_date)}</div>
+
+              <div>
+                Mileage: <b>{entry.mileage ?? "-"}</b>
               </div>
 
-              
- 
-
-
-
+              <div>
+                Litres:{" "}
+                <b>
+                  {entry.litres === null
+                    ? "-"
+                    : `${Number(entry.litres).toFixed(2)} L`}
+                </b>
+              </div>
             </div>
+
+            {entryPhotos.length > 0 && (
+              <div className="flex gap-1 shrink-0">
+                {entryPhotos.slice(0, 3).map((photo) => (
+                  <img
+                    key={photo.id}
+                    src={photo.photo_url}
+                    alt="Diesel receipt"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenPhoto(photo.photo_url)
+                    }}
+                    className="h-[46px] w-[46px] rounded-[9px] object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </button>
+      )
+    })}
+  </div>
+)}
+
+            <button
+              onClick={() => setArchiveOpen(false)}
+              className="w-full h-[42px] rounded-[14px] bg-blue-600 text-white font-bold mt-4"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
