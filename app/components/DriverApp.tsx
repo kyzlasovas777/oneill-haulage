@@ -19,6 +19,7 @@ type Entry = {
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
+
 type EntryPhoto = {
   id: string
   entry_id: number
@@ -575,7 +576,26 @@ const exportToExcel = () => {
     })
   }
 
-  const rows = visibleEntries.map((entry) => ({
+ const rows: any[] = []
+
+visibleEntries.forEach((entry, index) => {
+  const previousEntry = visibleEntries[index - 1]
+
+  if (previousEntry && previousEntry.date !== entry.date) {
+    rows.push({
+      Day: "",
+      Date: "",
+      Trailer: "",
+      From: "",
+      To: "",
+      "Loaded/Empty/Solo": "",
+      Reference: "",
+      Driver: "",
+      Reg: "",
+    })
+  }
+
+  rows.push({
     Day: formatDayName(entry.date),
     Date: formatExcelDate(entry.date),
     Trailer: entry.trailer,
@@ -585,7 +605,8 @@ const exportToExcel = () => {
     Reference: "",
     Driver: driverName,
     Reg: entry.regNumber ?? "",
-  }))
+  })
+})
 
   const worksheet = XLSX.utils.json_to_sheet(rows)
 
@@ -990,7 +1011,10 @@ setNewEntry({
           </div>
 
  {screen === "miles" && (
-  <MilesPage onBack={() => setScreen("main")} />
+<MilesPage
+  driverId={driverId}
+  onBack={() => setScreen("main")}
+/>
 )}
 
 {screen === "diesel" && (
