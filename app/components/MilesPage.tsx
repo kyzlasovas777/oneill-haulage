@@ -15,6 +15,7 @@ type MileageEntry = {
   start_mileage: number
   finish_mileage: number | null
   total_miles: number | null
+  reg_number: string | null
   created_at?: string
 }
 
@@ -69,10 +70,15 @@ function getWeekTitle(dateText: string) {
 
 export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const [entries, setEntries] = useState<MileageEntry[]>([])
+const [trucks, setTrucks] = useState<any[]>([])
+const [assignedReg, setAssignedReg] = useState("")
 
   const [startMileage, setStartMileage] = useState("")
   const [finishMileage, setFinishMileage] = useState("")
   const [saving, setSaving] = useState(false)
+  const [regNumber, setRegNumber] = useState("")
+
+
 
   const [addOpen, setAddOpen] = useState(false)
 
@@ -80,6 +86,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const [editStartMileage, setEditStartMileage] = useState("")
   const [editFinishMileage, setEditFinishMileage] = useState("")
   const [editingSaving, setEditingSaving] = useState(false)
+const [editRegNumber, setEditRegNumber] = useState("")
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
@@ -91,6 +98,8 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const needsStart = !todayEntry
   const needsFinish = todayEntry && todayEntry.finish_mileage === null
   const todayCompleted = todayEntry && todayEntry.finish_mileage !== null
+
+
 
   const loadMileageEntries = async () => {
     const { data, error } = await supabase
@@ -108,9 +117,31 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setEntries(data ?? [])
   }
 
-  useEffect(() => {
-    loadMileageEntries()
-  }, [driverId])
+  const loadTrucks = async () => {
+  const { data } = await supabase
+    .from("trucks")
+    .select("*")
+    .order("reg")
+console.log("TRUCKS:", data)
+  setTrucks(data ?? [])
+  console.log("Loaded trucks:", data)
+}
+
+const loadAssignedTruck = async () => {
+  const { data } = await supabase
+    .from("drivers")
+    .select("truck_reg")
+    .eq("id", driverId)
+    .single()
+
+  setAssignedReg(data?.truck_reg ?? "")
+}
+
+useEffect(() => {
+  loadMileageEntries()
+  loadTrucks()
+  loadAssignedTruck()
+}, [driverId])
 
   const openEdit = (entry: MileageEntry) => {
     setEditingEntry(entry)
@@ -118,17 +149,20 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setEditFinishMileage(
       entry.finish_mileage === null ? "" : String(entry.finish_mileage)
     )
+    setEditRegNumber(entry.reg_number ?? "")
   }
 
   const closeEdit = () => {
     setEditingEntry(null)
     setEditStartMileage("")
     setEditFinishMileage("")
+  setEditRegNumber("")
   }
 
   const openAdd = () => {
     setStartMileage("")
     setFinishMileage("")
+  setRegNumber(assignedReg)
     setAddOpen(true)
   }
 
@@ -136,6 +170,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setAddOpen(false)
     setStartMileage("")
     setFinishMileage("")
+    setRegNumber("")
   }
 
   const saveStartMileage = async () => {
@@ -163,6 +198,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
         start_mileage: start,
         finish_mileage: null,
         total_miles: null,
+        reg_number: regNumber || null,
       })
       .select()
       .single()
@@ -204,6 +240,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
       .update({
         finish_mileage: finish,
         total_miles: total,
+        reg_number: regNumber || todayEntry.reg_number || null,
       })
       .eq("id", todayEntry.id)
       .select()
@@ -272,6 +309,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
         start_mileage: start,
         finish_mileage: finish,
         total_miles: total,
+        reg_number: editRegNumber || null,
       })
       .eq("id", editingEntry.id)
       .select()
@@ -376,9 +414,13 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
           >
 <div>
-  <div className="text-center mb-1">
-    {displayDate(entry.entry_date)}
-  </div>
+<div className="relative text-center mb-1">
+ <div>{displayDate(entry.entry_date)}</div>
+
+<div className="absolute right-0 top-0 font-semibold">
+  {entry.reg_number ?? assignedReg}
+</div>
+</div>
 
   <div className="flex items-center justify-between">
 <div>
@@ -388,7 +430,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   <span className="text-zinc-500">Finish:</span>{" "}
   <b>{entry.finish_mileage ?? "-"}</b>
 </div>
-<div>
+<div className="text-right">
   <span className="text-zinc-500">Total:</span>{" "}
   <b>{entry.total_miles ?? "-"}</b> miles
 </div>
@@ -416,21 +458,52 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
           >
-            <h2 className="text-[22px] font-bold mb-3">Fill Up Miles</h2>
+        <h2 className="text-[22px] font-bold mb-3">Add Mileage</h2>
 
             <div className="space-y-3">
-              {needsStart && (
-                <input
-                  type="number"
-                  placeholder="Start mileage"
-                  value={startMileage}
-                  onChange={(e) => setStartMileage(e.target.value)}
-                  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
-                />
-              )}
+             {needsStart && (
+  <>
+<select
+  value={regNumber}
+  onChange={(e) => setRegNumber(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+>
+  <option value="">Select Reg</option>
+
+  {trucks.map((truck) => (
+    <option key={truck.id} value={truck.reg}>
+      {truck.reg}
+    </option>
+  ))}
+</select>
+
+    <input
+      type="number"
+      placeholder="Start mileage"
+      value={startMileage}
+      onChange={(e) => setStartMileage(e.target.value)}
+      className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+    />
+  </>
+)}
 
               {needsFinish && todayEntry && (
                 <>
+
+<select
+  value={regNumber}
+  onChange={(e) => setRegNumber(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+>
+  <option value="">Select Reg</option>
+
+  {trucks.map((truck) => (
+    <option key={truck.id} value={truck.reg}>
+      {truck.reg}
+    </option>
+  ))}
+</select>
+
                   <div className="text-[15px] font-bold">
                     Start: {todayEntry.start_mileage}
                   </div>
@@ -487,6 +560,21 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             </div>
 
             <div className="space-y-3">
+
+<select
+  value={editRegNumber}
+  onChange={(e) => setEditRegNumber(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+>
+  <option value="">Select Reg</option>
+
+  {trucks.map((truck) => (
+    <option key={truck.id} value={truck.reg}>
+      {truck.reg}
+    </option>
+  ))}
+</select>
+
               <input
                 type="number"
                 placeholder="Start mileage"
