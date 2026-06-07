@@ -1,3 +1,5 @@
+"use client"
+
 import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
 
@@ -23,9 +25,13 @@ function formatEntryDate(date: Date) {
   return `${year}.${month}.${day}`
 }
 
-function displayDate(dateText: string) {
+function parseEntryDate(dateText: string) {
   const [year, month, day] = dateText.split(".").map(Number)
-  const date = new Date(year, month - 1, day)
+  return new Date(year, month - 1, day)
+}
+
+function displayDate(dateText: string) {
+  const date = parseEntryDate(dateText)
 
   return date.toLocaleDateString("en-GB", {
     weekday: "long",
@@ -35,22 +41,56 @@ function displayDate(dateText: string) {
   })
 }
 
+function getWeekStart(date: Date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+
+  d.setDate(d.getDate() + mondayOffset)
+  d.setHours(0, 0, 0, 0)
+
+  return d
+}
+
+function formatShort(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  return `${day}.${month}`
+}
+
+function getWeekTitle(dateText: string) {
+  const date = parseEntryDate(dateText)
+  const monday = getWeekStart(date)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  return `${formatShort(monday)}-${formatShort(sunday)}`
+}
+
 export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const [entries, setEntries] = useState<MileageEntry[]>([])
+
   const [startMileage, setStartMileage] = useState("")
   const [finishMileage, setFinishMileage] = useState("")
   const [saving, setSaving] = useState(false)
+
+  const [addOpen, setAddOpen] = useState(false)
 
   const [editingEntry, setEditingEntry] = useState<MileageEntry | null>(null)
   const [editStartMileage, setEditStartMileage] = useState("")
   const [editFinishMileage, setEditFinishMileage] = useState("")
   const [editingSaving, setEditingSaving] = useState(false)
 
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
+
   const today = formatEntryDate(new Date())
+  const currentWeekTitle = getWeekTitle(today)
 
   const todayEntry = entries.find((entry) => entry.entry_date === today)
   const needsStart = !todayEntry
   const needsFinish = todayEntry && todayEntry.finish_mileage === null
+  const todayCompleted = todayEntry && todayEntry.finish_mileage !== null
 
   const loadMileageEntries = async () => {
     const { data, error } = await supabase
@@ -58,6 +98,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
       .select("*")
       .eq("driver_id", driverId)
       .order("entry_date", { ascending: false })
+      .order("created_at", { ascending: false })
 
     if (error) {
       console.log("MILEAGE LOAD ERROR:", error)
@@ -85,6 +126,18 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setEditFinishMileage("")
   }
 
+  const openAdd = () => {
+    setStartMileage("")
+    setFinishMileage("")
+    setAddOpen(true)
+  }
+
+  const closeAdd = () => {
+    setAddOpen(false)
+    setStartMileage("")
+    setFinishMileage("")
+  }
+
   const saveStartMileage = async () => {
     if (saving) return
 
@@ -92,6 +145,11 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
     if (!startMileage) {
       alert("Enter start mileage")
+      return
+    }
+
+    if (start <= 0) {
+      alert("Start mileage must be higher than 0")
       return
     }
 
@@ -119,7 +177,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
     if (data) setEntries((prev) => [data, ...prev])
 
-    setStartMileage("")
+    closeAdd()
   }
 
   const saveFinishMileage = async () => {
@@ -165,7 +223,21 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
       )
     }
 
-    setFinishMileage("")
+    closeAdd()
+  }
+
+  const saveAddMileage = async () => {
+    if (needsStart) {
+      await saveStartMileage()
+      return
+    }
+
+    if (needsFinish) {
+      await saveFinishMileage()
+      return
+    }
+
+    alert("Today mileage completed")
   }
 
   const saveEditMileage = async () => {
@@ -177,6 +249,11 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
     if (!editStartMileage) {
       alert("Enter start mileage")
+      return
+    }
+
+    if (start <= 0) {
+      alert("Start mileage must be higher than 0")
       return
     }
 
@@ -217,122 +294,178 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     closeEdit()
   }
 
-  const weekTotal = entries.reduce(
+  const deleteMileageEntry = async (id: number) => {
+    if (!confirm("Delete this mileage entry?")) return
+
+    const { error } = await supabase
+      .from("mileage_entries")
+      .delete()
+      .eq("id", id)
+
+    if (error) {
+      alert("Delete failed")
+      return
+    }
+
+    setEntries((prev) => prev.filter((entry) => entry.id !== id))
+    closeEdit()
+  }
+
+  const currentWeekEntries = entries.filter(
+    (entry) => getWeekTitle(entry.entry_date) === currentWeekTitle
+  )
+
+  const weekTotal = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.total_miles ?? 0),
     0
   )
 
+  const archiveWeeks = entries
+    .filter((entry) => getWeekTitle(entry.entry_date) !== currentWeekTitle)
+    .reduce((groups, entry) => {
+      const title = getWeekTitle(entry.entry_date)
+      if (!groups[title]) groups[title] = []
+      groups[title].push(entry)
+      return groups
+    }, {} as Record<string, MileageEntry[]>)
+
+  const archiveTitles = Object.keys(archiveWeeks)
+
+  const visibleArchiveEntries = activeArchiveWeek
+    ? archiveWeeks[activeArchiveWeek] ?? []
+    : []
+
   return (
-    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[120px]">
-    <div className="flex items-center gap-2 mb-3">
-  <button
-    onClick={onBack}
-    className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-  >
-    Back
-  </button>
+    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={onBack}
+          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+        >
+          Back
+        </button>
 
-  <button
-    className="ml-auto h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-  >
-    Archive
-  </button>
-</div>
+        <div className="flex-1 text-center">
+          <div className="text-[22px] font-bold">Miles</div>
+          <div className="text-[14px] font-bold">This week {weekTotal} miles</div>
+        </div>
 
-     <div className="text-center py-2">
-  <h1 className="text-[28px] font-bold">
-    Miles
-  </h1>
+        <button
+          onClick={() => {
+            setArchiveOpen(true)
+            setActiveArchiveWeek(null)
+          }}
+          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+        >
+          Archive
+        </button>
+      </div>
 
-  {todayEntry && todayEntry.finish_mileage !== null && (
-    <div className="mt-2 text-[15px] font-bold text-green-700">
-      Today mileage completed
-    </div>
-  )}
-</div>
+      {todayCompleted && (
+        <div className="text-center text-[14px] font-bold text-green-700 mb-3">
+          Today mileage completed
+        </div>
+      )}
 
-
-
-     <div className="bg-white rounded-[18px] p-4 mb-5">
-  <div className="text-center text-[15px] font-bold">
-    This week
-  </div>
-
-  <div className="text-center text-[34px] font-bold mt-1">
-    {weekTotal} miles
-  </div>
-</div>
-
-      <div className="space-y-2">
-        {entries.map((entry) => (
+      <div className="mt-5 space-y-3">
+        {currentWeekEntries.map((entry) => (
           <button
             key={entry.id}
             onClick={() => openEdit(entry)}
-            className="w-full text-left bg-white rounded-[16px] p-3"
+            className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
           >
-            <div className="font-bold text-[16px]">
-              {displayDate(entry.entry_date)}
-            </div>
+            <div className="pl-2">
+              <div>{displayDate(entry.entry_date)}</div>
 
-            <div className="mt-2 text-[14px]">
-              Start: <b>{entry.start_mileage}</b>
-            </div>
+              <div>
+                Start: <b>{entry.start_mileage}</b>
+              </div>
 
-            <div className="text-[14px]">
-              Finish: <b>{entry.finish_mileage ?? "-"}</b>
-            </div>
+              <div>
+                Finish: <b>{entry.finish_mileage ?? "-"}</b>
+              </div>
 
-            <div className="mt-2 text-[17px] font-bold">
-              Total: {entry.total_miles ?? "-"} miles
+              <div>
+                Total: <b>{entry.total_miles ?? "-"} miles</b>
+              </div>
             </div>
           </button>
         ))}
       </div>
 
-      {(needsStart || needsFinish) && (
-        <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
-          <div className="bg-white rounded-[18px] p-3 shadow-lg">
-            {needsStart && (
-              <div className="space-y-2">
+      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
+        <button
+          onClick={openAdd}
+          className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
+        >
+          + Add Mileage
+        </button>
+      </div>
+
+      {addOpen && (
+        <div
+          onClick={closeAdd}
+          className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
+          >
+            <h2 className="text-[22px] font-bold mb-3">Fill Up Miles</h2>
+
+            <div className="space-y-3">
+              {needsStart && (
                 <input
                   type="number"
                   placeholder="Start mileage"
                   value={startMileage}
                   onChange={(e) => setStartMileage(e.target.value)}
-                  className="w-full h-[44px] rounded-[12px] border px-4 text-[16px]"
+                  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
                 />
+              )}
 
-                <button
-                  onClick={saveStartMileage}
-                  className="w-full h-[46px] rounded-[14px] bg-blue-600 text-white font-bold text-[17px]"
-                >
-                  {saving ? "Saving..." : "Save Start"}
-                </button>
-              </div>
-            )}
+              {needsFinish && todayEntry && (
+                <>
+                  <div className="text-[15px] font-bold">
+                    Start: {todayEntry.start_mileage}
+                  </div>
 
-            {needsFinish && todayEntry && (
-              <div className="space-y-2">
-                <div className="text-[15px]">
-                  Start: <b>{todayEntry.start_mileage}</b>
+                  <input
+                    type="number"
+                    placeholder="Finish mileage"
+                    value={finishMileage}
+                    onChange={(e) => setFinishMileage(e.target.value)}
+                    className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+                  />
+                </>
+              )}
+
+              {todayCompleted && (
+                <div className="text-[15px] font-bold text-green-700">
+                  Today mileage completed
                 </div>
+              )}
 
-                <input
-                  type="number"
-                  placeholder="Finish mileage"
-                  value={finishMileage}
-                  onChange={(e) => setFinishMileage(e.target.value)}
-                  className="w-full h-[44px] rounded-[12px] border px-4 text-[16px]"
-                />
-
+              <div className="flex gap-2 pt-1">
                 <button
-                  onClick={saveFinishMileage}
-                  className="w-full h-[46px] rounded-[14px] bg-blue-600 text-white font-bold text-[17px]"
+                  type="button"
+                  onClick={closeAdd}
+                  className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
                 >
-                  {saving ? "Saving..." : "Save Finish"}
+                  Cancel
                 </button>
+
+                {!todayCompleted && (
+                  <button
+                    type="button"
+                    onClick={saveAddMileage}
+                    className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -346,7 +479,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
           >
-            <h2 className="text-[22px] font-bold mb-3">Edit Mileage</h2>
+            <h2 className="text-[22px] font-bold mb-3">Edit Miles</h2>
 
             <div className="text-[14px] font-bold mb-3 text-zinc-500">
               {displayDate(editingEntry.entry_date)}
@@ -371,6 +504,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
               <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={closeEdit}
                   className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
                 >
@@ -378,13 +512,111 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
                 </button>
 
                 <button
+                  type="button"
                   onClick={saveEditMileage}
                   className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
                 >
                   {editingSaving ? "Saving..." : "Save"}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteMileageEntry(editingEntry.id)}
+                  className="flex-1 h-[46px] rounded-[14px] bg-red-600 text-white font-bold"
+                >
+                  Delete
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {archiveOpen && (
+        <div
+          onClick={() => setArchiveOpen(false)}
+          className="fixed inset-0 z-[105] bg-black/40 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[380px] max-h-[85vh] overflow-y-auto bg-white rounded-[22px] p-4"
+          >
+            <h2 className="text-[22px] font-bold mb-3">
+              {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
+            </h2>
+
+            {!activeArchiveWeek && (
+              <div className="space-y-2">
+                {archiveTitles.length === 0 && (
+                  <div className="text-zinc-500">No archived weeks yet</div>
+                )}
+
+                {archiveTitles.map((title) => {
+                  const total = archiveWeeks[title].reduce(
+                    (sum, entry) => sum + (entry.total_miles ?? 0),
+                    0
+                  )
+
+                  return (
+                    <button
+                      key={title}
+                      onClick={() => setActiveArchiveWeek(title)}
+                      className="w-full bg-zinc-100 rounded-[14px] p-3 text-left"
+                    >
+                      <div className="font-bold">{title}</div>
+                      <div className="text-[14px]">
+                        {archiveWeeks[title].length} entries · {total} miles
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {activeArchiveWeek && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => setActiveArchiveWeek(null)}
+                  className="h-[38px] px-4 rounded-[12px] bg-zinc-200 font-bold mb-2"
+                >
+                  Back to weeks
+                </button>
+
+                {visibleArchiveEntries.map((entry) => (
+                  <button
+                    key={entry.id}
+                    onClick={() => {
+                      setArchiveOpen(false)
+                      openEdit(entry)
+                    }}
+                    className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
+                  >
+                    <div className="pl-2">
+                      <div>{displayDate(entry.entry_date)}</div>
+
+                      <div>
+                        Start: <b>{entry.start_mileage}</b>
+                      </div>
+
+                      <div>
+                        Finish: <b>{entry.finish_mileage ?? "-"}</b>
+                      </div>
+
+                      <div>
+                        Total: <b>{entry.total_miles ?? "-"} miles</b>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={() => setArchiveOpen(false)}
+              className="w-full h-[42px] rounded-[14px] bg-blue-600 text-white font-bold mt-4"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
