@@ -345,10 +345,15 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
           Back
         </button>
 
-        <div className="flex-1 text-center">
-          <div className="text-[22px] font-bold">Miles</div>
-          <div className="text-[14px] font-bold">This week {weekTotal} miles</div>
-        </div>
+       <div className="flex-1 text-center">
+  <div className="text-[22px] font-bold">Miles</div>
+
+  <div className="text-[14px]">
+    <span className="text-zinc-500">This week</span>{" "}
+    <b>{weekTotal}</b>{" "}
+    <span className="text-zinc-500">miles</span>
+  </div>
+</div>
 
         <button
           onClick={() => {
@@ -370,16 +375,23 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             onClick={() => openEdit(entry)}
             className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
           >
-           <div>
-  <div>{displayDate(entry.entry_date)}</div>
-
-  <div className="text-center">
-    Start: <b>{entry.start_mileage}</b> - Finish:{" "}
-    <b>{entry.finish_mileage ?? "-"}</b>
+<div>
+  <div className="text-center mb-1">
+    {displayDate(entry.entry_date)}
   </div>
 
-  <div className="text-right font-bold">
-    Total: {entry.total_miles ?? "-"} miles
+  <div className="flex items-center justify-between">
+<div>
+  <span className="text-zinc-500">Start:</span>{" "}
+  <b>{entry.start_mileage}</b>
+  {" - "}
+  <span className="text-zinc-500">Finish:</span>{" "}
+  <b>{entry.finish_mileage ?? "-"}</b>
+</div>
+<div>
+  <span className="text-zinc-500">Total:</span>{" "}
+  <b>{entry.total_miles ?? "-"}</b> miles
+</div>
   </div>
 </div>
           </button>
