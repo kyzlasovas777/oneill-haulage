@@ -277,27 +277,28 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[180px]">
-      <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={onBack}
-          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-        >
-          Back
-        </button>
+    <div className="flex items-center mb-3">
+  <button
+    onClick={onBack}
+    className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+  >
+    Back
+  </button>
 
-        <button className="ml-auto h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]">
-          Archive
-        </button>
-      </div>
+  <h1 className="flex-1 text-center text-[24px] font-bold">
+    Diesel
+  </h1>
 
-      <div className="text-center py-2">
-        <h1 className="text-[28px] font-bold">Diesel</h1>
-      </div>
+  <button className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]">
+    Archive
+  </button>
+</div>
+        
 
-      <div className="bg-white rounded-[18px] p-4 mb-5">
+  <div className="bg-white rounded-[18px] p-2 mb-3">
         <div className="text-center text-[15px] font-bold">This week</div>
 
-        <div className="text-center text-[34px] font-bold mt-1">
+      <div className="text-center text-[28px] font-bold">
           {weekLitres.toFixed(2)} L
         </div>
       </div>
@@ -309,32 +310,38 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
             onClick={() => openEdit(entry)}
             className="w-full text-left bg-white rounded-[18px] p-4 shadow-sm"
           >
-            <div className="font-bold text-[16px]">
-              {displayDate(entry.entry_date)}
-            </div>
+      <div className="flex items-center justify-between gap-3">
+  <div>
+    <div className="font-bold text-[16px]">
+      {displayDate(entry.entry_date)}
+    </div>
 
-            <div className="mt-2 text-[14px]">
-              Mileage: <b>{entry.mileage ?? "-"}</b>
-            </div>
+    <div className="mt-2 text-[14px]">
+      Mileage: <b>{entry.mileage ?? "-"}</b>
+    </div>
 
-            <div className="text-[14px]">
-              Litres:{" "}
-              <b>
-                {entry.litres === null ? "-" : `${Number(entry.litres).toFixed(2)} L`}
-              </b>
-            </div>
+    <div className="text-[14px]">
+      Litres:{" "}
+      <b>
+        {entry.litres === null
+          ? "-"
+          : `${Number(entry.litres).toFixed(2)} L`}
+      </b>
+    </div>
+  </div>
 
-            {entry.photo_url && (
-              <img
-                src={entry.photo_url}
-                alt="Diesel receipt"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setOpenPhoto(entry.photo_url ?? null)
-                }}
-                className="mt-3 h-[90px] w-[90px] rounded-[12px] object-cover"
-              />
-            )}
+  {entry.photo_url && (
+    <img
+      src={entry.photo_url}
+      alt="Diesel receipt"
+      onClick={(e) => {
+        e.stopPropagation()
+        setOpenPhoto(entry.photo_url ?? null)
+      }}
+      className="h-[58px] w-[58px] rounded-[10px] object-cover shrink-0"
+    />
+  )}
+</div>
           </button>
         ))}
       </div>
