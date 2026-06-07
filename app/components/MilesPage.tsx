@@ -41,6 +41,11 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const [finishMileage, setFinishMileage] = useState("")
   const [saving, setSaving] = useState(false)
 
+  const [editingEntry, setEditingEntry] = useState<MileageEntry | null>(null)
+  const [editStartMileage, setEditStartMileage] = useState("")
+  const [editFinishMileage, setEditFinishMileage] = useState("")
+  const [editingSaving, setEditingSaving] = useState(false)
+
   const today = formatEntryDate(new Date())
 
   const todayEntry = entries.find((entry) => entry.entry_date === today)
@@ -65,6 +70,20 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   useEffect(() => {
     loadMileageEntries()
   }, [driverId])
+
+  const openEdit = (entry: MileageEntry) => {
+    setEditingEntry(entry)
+    setEditStartMileage(String(entry.start_mileage))
+    setEditFinishMileage(
+      entry.finish_mileage === null ? "" : String(entry.finish_mileage)
+    )
+  }
+
+  const closeEdit = () => {
+    setEditingEntry(null)
+    setEditStartMileage("")
+    setEditFinishMileage("")
+  }
 
   const saveStartMileage = async () => {
     if (saving) return
@@ -149,6 +168,55 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setFinishMileage("")
   }
 
+  const saveEditMileage = async () => {
+    if (editingSaving || !editingEntry) return
+
+    const start = Number(editStartMileage)
+    const finish =
+      editFinishMileage.trim() === "" ? null : Number(editFinishMileage)
+
+    if (!editStartMileage) {
+      alert("Enter start mileage")
+      return
+    }
+
+    if (finish !== null && finish < start) {
+      alert("Finish mileage cannot be lower than start mileage")
+      return
+    }
+
+    const total = finish === null ? null : finish - start
+
+    setEditingSaving(true)
+
+    const { data, error } = await supabase
+      .from("mileage_entries")
+      .update({
+        start_mileage: start,
+        finish_mileage: finish,
+        total_miles: total,
+      })
+      .eq("id", editingEntry.id)
+      .select()
+      .single()
+
+    setEditingSaving(false)
+
+    if (error) {
+      console.log("MILEAGE EDIT SAVE ERROR:", error)
+      alert("Mileage edit error")
+      return
+    }
+
+    if (data) {
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === data.id ? data : entry))
+      )
+    }
+
+    closeEdit()
+  }
+
   const weekTotal = entries.reduce(
     (sum, entry) => sum + (entry.total_miles ?? 0),
     0
@@ -156,12 +224,20 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[120px]">
-      <button
-        onClick={onBack}
-        className="mb-3 h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-      >
-        Back
-      </button>
+    <div className="flex items-center gap-2 mb-3">
+  <button
+    onClick={onBack}
+    className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+  >
+    Back
+  </button>
+
+  <button
+    className="ml-auto h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
+  >
+    Archive
+  </button>
+</div>
 
       <div className="bg-white rounded-[18px] p-4 mb-3">
         <h1 className="text-[22px] font-bold">Miles</h1>
@@ -173,6 +249,8 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
         )}
       </div>
 
+
+
       <div className="bg-white rounded-[18px] p-4 mb-3">
         <div className="text-[15px] font-bold">This week</div>
         <div className="text-[26px] font-bold mt-1">{weekTotal} miles</div>
@@ -180,7 +258,11 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
       <div className="space-y-2">
         {entries.map((entry) => (
-          <div key={entry.id} className="bg-white rounded-[16px] p-3">
+          <button
+            key={entry.id}
+            onClick={() => openEdit(entry)}
+            className="w-full text-left bg-white rounded-[16px] p-3"
+          >
             <div className="font-bold text-[16px]">
               {displayDate(entry.entry_date)}
             </div>
@@ -196,7 +278,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             <div className="mt-2 text-[17px] font-bold">
               Total: {entry.total_miles ?? "-"} miles
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -244,6 +326,58 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {editingEntry && (
+        <div
+          onClick={closeEdit}
+          className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
+          >
+            <h2 className="text-[22px] font-bold mb-3">Edit Mileage</h2>
+
+            <div className="text-[14px] font-bold mb-3 text-zinc-500">
+              {displayDate(editingEntry.entry_date)}
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="number"
+                placeholder="Start mileage"
+                value={editStartMileage}
+                onChange={(e) => setEditStartMileage(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              />
+
+              <input
+                type="number"
+                placeholder="Finish mileage"
+                value={editFinishMileage}
+                onChange={(e) => setEditFinishMileage(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              />
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={closeEdit}
+                  className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={saveEditMileage}
+                  className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
+                >
+                  {editingSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
