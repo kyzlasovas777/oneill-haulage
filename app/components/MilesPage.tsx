@@ -239,22 +239,29 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   </button>
 </div>
 
-      <div className="bg-white rounded-[18px] p-4 mb-3">
-        <h1 className="text-[22px] font-bold">Miles</h1>
+     <div className="text-center py-2">
+  <h1 className="text-[28px] font-bold">
+    Miles
+  </h1>
 
-        {todayEntry && todayEntry.finish_mileage !== null && (
-          <div className="mt-3 text-[15px] font-bold text-green-700">
-            Today mileage completed
-          </div>
-        )}
-      </div>
+  {todayEntry && todayEntry.finish_mileage !== null && (
+    <div className="mt-2 text-[15px] font-bold text-green-700">
+      Today mileage completed
+    </div>
+  )}
+</div>
 
 
 
-      <div className="bg-white rounded-[18px] p-4 mb-3">
-        <div className="text-[15px] font-bold">This week</div>
-        <div className="text-[26px] font-bold mt-1">{weekTotal} miles</div>
-      </div>
+     <div className="bg-white rounded-[18px] p-4 mb-5">
+  <div className="text-center text-[15px] font-bold">
+    This week
+  </div>
+
+  <div className="text-center text-[34px] font-bold mt-1">
+    {weekTotal} miles
+  </div>
+</div>
 
       <div className="space-y-2">
         {entries.map((entry) => (
