@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import MilesPage from "./MilesPage"
 import DieselPage from "./DieselPage"
+import * as XLSX from "xlsx"
 
 type Entry = {
   id: number
@@ -547,6 +548,66 @@ useLayoutEffect(() => {
 
   el.scrollTop = el.scrollHeight
 }, [screen, visibleEntries.length])
+
+const exportToExcel = () => {
+  if (visibleEntries.length === 0) {
+    alert("No entries to export")
+    return
+  }
+
+  const parseDate = (dateText: string) => {
+    const [year, month, day] = dateText.split(".").map(Number)
+    return new Date(year, month - 1, day)
+  }
+
+  const formatExcelDate = (dateText: string) => {
+    const date = parseDate(dateText)
+    const day = String(date.getDate()).padStart(2, "0")
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const year = date.getFullYear()
+
+    return `${day}/${month}/${year}`
+  }
+
+  const formatDayName = (dateText: string) => {
+    return parseDate(dateText).toLocaleDateString("en-GB", {
+      weekday: "long",
+    })
+  }
+
+  const rows = visibleEntries.map((entry) => ({
+    Day: formatDayName(entry.date),
+    Date: formatExcelDate(entry.date),
+    Trailer: entry.trailer,
+    From: entry.from,
+    To: entry.to,
+    "Loaded/Empty/Solo": entry.status,
+    Reference: "",
+    Driver: driverName,
+    Reg: entry.regNumber ?? "",
+  }))
+
+  const worksheet = XLSX.utils.json_to_sheet(rows)
+
+  worksheet["!cols"] = [
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+  ]
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Entries")
+
+const fileName = `${formatShort(monday)}-${formatShort(sunday)}   ${monday.getFullYear()} ${driverName}.xlsx`
+
+  XLSX.writeFile(workbook, fileName)
+}
 
   const groupedEntries = visibleEntries.reduce((groups, entry) => {
     if (!groups[entry.date]) groups[entry.date] = []
@@ -1127,7 +1188,10 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 </button>
 
 {isBoss && (
-  <button className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]">
+<button
+  onClick={exportToExcel}
+  className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]"
+>
     <span>📊</span>
     Export to Excel
   </button>
