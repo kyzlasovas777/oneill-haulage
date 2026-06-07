@@ -237,7 +237,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
       return
     }
 
-    alert("Today mileage completed")
+   
   }
 
   const saveEditMileage = async () => {
@@ -361,11 +361,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
         </button>
       </div>
 
-      {todayCompleted && (
-        <div className="text-center text-[14px] font-bold text-green-700 mb-3">
-          Today mileage completed
-        </div>
-      )}
+   
 
       <div className="mt-5 space-y-3">
         {currentWeekEntries.map((entry) => (
@@ -374,21 +370,18 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
             onClick={() => openEdit(entry)}
             className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
           >
-            <div className="pl-2">
-              <div>{displayDate(entry.entry_date)}</div>
+           <div>
+  <div>{displayDate(entry.entry_date)}</div>
 
-              <div>
-                Start: <b>{entry.start_mileage}</b>
-              </div>
+  <div className="text-center">
+    Start: <b>{entry.start_mileage}</b> - Finish:{" "}
+    <b>{entry.finish_mileage ?? "-"}</b>
+  </div>
 
-              <div>
-                Finish: <b>{entry.finish_mileage ?? "-"}</b>
-              </div>
-
-              <div>
-                Total: <b>{entry.total_miles ?? "-"} miles</b>
-              </div>
-            </div>
+  <div className="text-right font-bold">
+    Total: {entry.total_miles ?? "-"} miles
+  </div>
+</div>
           </button>
         ))}
       </div>
@@ -440,11 +433,7 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
                 </>
               )}
 
-              {todayCompleted && (
-                <div className="text-[15px] font-bold text-green-700">
-                  Today mileage completed
-                </div>
-              )}
+      
 
               <div className="flex gap-2 pt-1">
                 <button
@@ -591,21 +580,18 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
                     }}
                     className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
                   >
-                    <div className="pl-2">
-                      <div>{displayDate(entry.entry_date)}</div>
+<div>
+  <div>{displayDate(entry.entry_date)}</div>
 
-                      <div>
-                        Start: <b>{entry.start_mileage}</b>
-                      </div>
+  <div className="text-center">
+    Start: <b>{entry.start_mileage}</b> - Finish:{" "}
+    <b>{entry.finish_mileage ?? "-"}</b>
+  </div>
 
-                      <div>
-                        Finish: <b>{entry.finish_mileage ?? "-"}</b>
-                      </div>
-
-                      <div>
-                        Total: <b>{entry.total_miles ?? "-"} miles</b>
-                      </div>
-                    </div>
+  <div className="text-right font-bold">
+    Total: {entry.total_miles ?? "-"} miles
+  </div>
+</div>
                   </button>
                 ))}
               </div>
