@@ -58,6 +58,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
   const photoInputRef = useRef<HTMLInputElement | null>(null)
 
   const [openPhoto, setOpenPhoto] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   const [editingEntry, setEditingEntry] = useState<DieselEntry | null>(null)
   const [editMileage, setEditMileage] = useState("")
@@ -174,11 +175,16 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
   setPhotos((prev) => prev.filter((item) => item.id !== photo.id))
 }
 
-  const clearPhotos = () => {
-    photoPreviews.forEach((url) => URL.revokeObjectURL(url))
-    setPhotoFiles([])
-  
+const clearPhotos = () => {
+  photoPreviews.forEach((url) => URL.revokeObjectURL(url))
+
+  setPhotoFiles([])
+  setPhotoPreviews([])
+
+  if (photoInputRef.current) {
+    photoInputRef.current.value = ""
   }
+}
 
   const clearEditPhotos = () => {
     editPhotoPreviews.forEach((url) => URL.revokeObjectURL(url))
@@ -381,13 +387,30 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
     setEditingSaving(false)
   }
 
+  const deleteDieselEntry = async (id: number) => {
+  if (!confirm("Delete this diesel entry?")) return
+
+  const { error } = await supabase
+    .from("diesel_entries")
+    .delete()
+    .eq("id", id)
+
+  if (error) {
+    alert("Delete failed")
+    return
+  }
+
+  setEntries((prev) => prev.filter((entry) => entry.id !== id))
+  closeEdit()
+}
+
   const weekLitres = entries.reduce(
     (sum, entry) => sum + (entry.litres ?? 0),
     0
   )
 
   return (
-    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[180px]">
+    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -416,19 +439,19 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
             <button
               key={entry.id}
               onClick={() => openEdit(entry)}
-              className="w-full text-left bg-white rounded-[18px] p-4 shadow-sm"
+              className="w-full text-left bg-white rounded-[18px] p-1 shadow-sm"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="font-bold text-[16px]">
+                <div className="pl-2">
                     {displayDate(entry.entry_date)}
                   </div>
 
-                  <div className="mt-2 text-[14px]">
+                <div className="pl-2">
                     Mileage: <b>{entry.mileage ?? "-"}</b>
                   </div>
 
-                  <div className="text-[14px]">
+                <div className="pl-2">
                     Litres:{" "}
                     <b>
                       {entry.litres === null
@@ -460,76 +483,120 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
         })}
       </div>
 
-      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
-        <div className="bg-white rounded-[18px] p-3 shadow-lg space-y-2">
-          <input
-            type="number"
-            placeholder="Mileage"
-            value={mileage}
-            onChange={(e) => setMileage(e.target.value)}
-            className="w-full h-[44px] rounded-[12px] border px-4 text-[16px]"
-          />
+  <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
+  <button
+  onClick={() => {
+  setMileage("")
+  setLitres("")
+  clearPhotos()
+  setAddOpen(true)
+}}
+    className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
+  >
+    + Fill Up Diesel
+  </button>
+</div>
 
-          <input
-            type="number"
-            placeholder="Litres"
-            value={litres}
-            onChange={(e) => setLitres(e.target.value)}
-            className="w-full h-[44px] rounded-[12px] border px-4 text-[16px]"
-          />
-
-          <button
-            onClick={() => photoInputRef.current?.click()}
-            className="w-full h-[42px] rounded-[12px] bg-zinc-200 font-bold text-[15px]"
+      {addOpen && (
+        <div
+          onClick={() => setAddOpen(false)}
+          className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
           >
-            📷 Add Photo
-          </button>
+            <h2 className="text-[22px] font-bold mb-3">Fill Up Diesel</h2>
 
-          {photoPreviews.length > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto">
-            {photoPreviews.map((preview, index) => (
-  <div key={preview} className="relative shrink-0">
-    <img
-      src={preview}
-      alt="Preview"
-      className="h-[48px] w-[48px] rounded-[9px] object-cover"
-    />
+            <div className="space-y-3">
+              <input
+                type="number"
+                placeholder="Mileage"
+                value={mileage}
+                onChange={(e) => setMileage(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              />
 
-    <button
-      onClick={() => removePhoto(index)}
-      className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
-    >
-      ×
-    </button>
-  </div>
-))}
+              <input
+                type="number"
+                placeholder="Litres"
+                value={litres}
+                onChange={(e) => setLitres(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              />
 
               <button
-                onClick={clearPhotos}
-                className="h-[38px] px-4 rounded-[12px] bg-red-100 text-red-700 font-bold shrink-0"
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="w-full h-[42px] rounded-[12px] bg-zinc-200 font-bold text-[15px]"
               >
-                Remove
+                📷 Add Photo
               </button>
+
+              {photoPreviews.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto py-1">
+                  {photoPreviews.map((preview, index) => (
+                    <div key={preview} className="relative shrink-0">
+                      <img
+                        src={preview}
+                        alt="Preview"
+                        onClick={() => setOpenPhoto(preview)}
+                        className="h-[70px] w-[70px] rounded-[10px] object-cover"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removePhoto(index)
+                        }}
+className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => choosePhotos(e.target.files)}
+              />
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddOpen(false)
+                    clearPhotos()
+                    setMileage("")
+                    setLitres("")
+                  }}
+                  className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await saveDiesel()
+                    setAddOpen(false)
+                  }}
+                  className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
-          )}
-
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => choosePhotos(e.target.files)}
-          />
-
-          <button
-            onClick={saveDiesel}
-            className="w-full h-[46px] rounded-[14px] bg-blue-600 text-white font-bold text-[17px]"
-          >
-            {saving ? "Saving..." : "Save Diesel"}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
        {editingEntry && (
         <div
@@ -570,7 +637,7 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
                 📷 Add Photo
               </button>
 
-              <div className="flex gap-2 overflow-x-auto py-1">
+             <div className="flex gap-2 overflow-x-auto pt-3 pb-1">
                 {getEntryPhotos(editingEntry.id).map((photo) => (
                   <div key={photo.id} className="relative shrink-0">
                     <img
@@ -651,7 +718,22 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
                 >
                   {editingSaving ? "Saving..." : "Save"}
                 </button>
+            
+             <button
+              type="button"
+  onClick={() => deleteDieselEntry(editingEntry.id)}
+  className="flex-1 h-[46px] rounded-[14px] bg-red-600 text-white font-bold"
+>
+  Delete
+</button>
+             
               </div>
+
+              
+ 
+
+
+
             </div>
           </div>
         </div>
