@@ -36,6 +36,7 @@ type DriverAppProps = {
   driverId: number
   driverName: string
   onBack?: () => void
+  isBoss?: boolean
 }
 
 function getWeekStart(date: Date) {
@@ -117,7 +118,12 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
-export default function DriverApp({ driverId, driverName, onBack }: DriverAppProps) {
+export default function DriverApp({
+  driverId,
+  driverName,
+  onBack,
+  isBoss = false,
+}: DriverAppProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
  
@@ -1081,7 +1087,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                 setScreen("archives")
                 setShowMainMenu(false)
               }}
-              className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px] text-black"
+             className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px] text-black"
             >
               <span>▰</span>
               Archives
@@ -1092,18 +1098,18 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                 setShowMainMenu(false)
                 setShowPlaceModal(true)
               }}
-              className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px] text-black"
+            className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px] text-black"
             >
               <span>＋</span>
               Add Place
             </button>
 
-     <button
+  <button
   onClick={() => {
     setScreen("miles")
     setShowMainMenu(false)
   }}
-  className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px]"
+  className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]"
 >
   <span>🛣️</span>
   Miles
@@ -1114,11 +1120,18 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     setScreen("diesel")
     setShowMainMenu(false)
   }}
-  className="w-full h-[64px] px-8 flex items-center gap-6 text-[24px]"
+  className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]"
 >
   <span>⛽</span>
   Diesel
 </button>
+
+{isBoss && (
+  <button className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]">
+    <span>📊</span>
+    Export to Excel
+  </button>
+)}
 
           </div>
         </div>

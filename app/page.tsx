@@ -82,6 +82,7 @@ export default function Home() {
     <DriverApp
       driverId={activeDriver?.id ?? 0}
       driverName={activeDriver?.name ?? ""}
+      isBoss={openedFromBoss}
       onBack={() => {
         if (openedFromBoss) {
           setScreen("admin")
