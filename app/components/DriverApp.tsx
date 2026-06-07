@@ -1080,7 +1080,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-[330px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
+            className="w-[220-px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
           >
             <button
               onClick={() => {
