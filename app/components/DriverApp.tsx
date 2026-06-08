@@ -249,8 +249,10 @@ const [newEntry, setNewEntry] = useState({
       ? activeArchive.entries.filter((entry) => entry.syncStatus !== "delete_pending")
       : entries.filter((entry) => entry.syncStatus !== "delete_pending")
 
-  const visibleTitle =
-  screen === "archive" && activeArchive ? activeArchive.title : displayWeekTitle
+const visibleTitle =
+  screen === "archive" && activeArchive
+    ? formatWeekTitle(activeArchive.title)
+    : displayWeekTitle
 
     const uploadLocalPhotosForEntry = async (entryId: number, localPhotos?: string[]) => {
   if (!localPhotos || localPhotos.length === 0) return
@@ -625,7 +627,15 @@ visibleEntries.forEach((entry, index) => {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, "Entries")
 
-const fileName = `${formatShort(monday)}-${formatShort(sunday)}   ${monday.getFullYear()} ${driverName}.xlsx`
+const exportWeekTitle =
+  screen === "archive" && activeArchive
+    ? activeArchive.title
+    : currentWeekTitle
+
+const exportYear =
+  visibleEntries[0]?.date?.split(".")[0] ?? String(monday.getFullYear())
+
+const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverName}.xlsx`
 
   XLSX.writeFile(workbook, fileName)
 }
@@ -1024,16 +1034,24 @@ setNewEntry({
 />
 )}
 
-          {screen === "main" ? (
-            <button
-              onClick={() => setShowMainMenu(true)}
-              className="text-[30px] text-blue-500"
-            >
-              ☰
-            </button>
-          ) : (
-            <div className="w-5" />
-          )}
+        {screen === "main" ? (
+  <button
+    onClick={() => setShowMainMenu(true)}
+    className="text-[30px] text-blue-500"
+  >
+    ☰
+  </button>
+) : screen === "archive" && isBoss ? (
+<button
+  onClick={exportToExcel}
+  className="h-[40px] px-3 rounded-[12px] bg-white flex items-center gap-2 text-[16px] font-semibold text-black"
+>
+  <span>📊</span>
+  Export to Excel
+</button>
+) : (
+  <div className="w-5" />
+)}
         </div>
       </div>
 
@@ -1057,9 +1075,9 @@ setNewEntry({
                   {new Date().getFullYear()}
                 </span>
 
-                <span className="w-full text-center text-[16px] font-bold text-black">
-                  {archive.title}
-                </span>
+               <span className="w-full text-center text-[16px] font-bold text-black">
+  {formatWeekTitle(archive.title)}
+</span>
 
                 <span className="absolute right-4 text-[13px] text-zinc-400">
                   {archive.entries.length} rows
