@@ -198,40 +198,62 @@ const [trucks, setTrucks] = useState<string[]>([])
   }))
 }, [driverTruck])
 
+
+
   const [showPlaceModal, setShowPlaceModal] = useState(false)
   const [newPlace, setNewPlace] = useState("")
 
+const DEFAULT_PLACES = [
+  "CnM",
+  "Stena",
+  "ST",
+  "Mcb Dub",
+  "B.E.Naas",
+  "Shercock",
+  "Enniskillen",
+  "Americold",
+  "Pulse",
+  "Alied Foods",
+  "Masterlink",
+  "Irish Ferry",
+  "An Post",
+  "DFDS Belfast",
+  "Belfast Stena",
+  "Tesco Ballymun",
+  "Turkeys Grove",
+  "Musgrave",
+  "Sam Dennigan",
+  "Belfast Stena Storage",
+  "Drogheda",
+  "Primeline",
+  "Larne PnO",
+  "Golden Bake Dublin",
+  "TIP Airport",
+  "DFS Dublin",
+  "Smyths Dundalk",
+]
 
+ const PLACES_KEY = `oneill-places-${driverId}`
 
-  const [places, setPlaces] = useState([
-    "CnM",
-    "Stena",
-    "ST",
-    "Mcb Dub",
-    "B.E.Naas",
-    "Shercock",
-    "Enniskillen",
-    "Americold",
-    "Pulse",
-    "Alied Foods",
-    "Masterlink",
-    "Irish Ferry",
-    "An Post",
-    "DFDS Belfast",
-    "Belfast Stena",
-    "Tesco Ballymun",
-    "Turkeys Grove",
-    "Musgrave",
-    "Sam Dennigan",
-    "Belfast Stena Storage",
-    "Drogheda",
-    "Primeline",
-    "Larne PnO",
-    "Golden Bake Dublin",
-    "TIP Airport",
-    "DFS Dublin",
-    "Smyths Dundalk",
-  ])
+const [places, setPlaces] = useState<string[]>(() => {
+  if (typeof window === "undefined") return DEFAULT_PLACES
+
+  try {
+    const saved = localStorage.getItem(PLACES_KEY)
+    return saved ? JSON.parse(saved) : DEFAULT_PLACES
+  } catch {
+    return DEFAULT_PLACES
+  }
+})
+
+useEffect(() => {
+  if (typeof window === "undefined") return
+
+  localStorage.setItem(
+    PLACES_KEY,
+    JSON.stringify(places)
+  )
+}, [places, PLACES_KEY])
 
 const [newEntry, setNewEntry] = useState({
   trailer: "",
