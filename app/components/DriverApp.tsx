@@ -982,11 +982,11 @@ setNewEntry({
    <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
       <div className="px-4 pt-6 pb-1">
         <div className="flex items-center justify-between">
-          <button
+    <button
   onClick={handleBackButton}
   className="text-blue-500 text-[18px] font-medium"
 >
-  Logout
+{screen === "main" && !isBoss ? "Logout" : "← Back"}
 </button>
 
           <div className="flex flex-col items-center">
