@@ -356,7 +356,7 @@ setShowAddDriver(false)
 
   return (
     <main className="min-h-screen bg-[#efeff4] px-4 pt-8">
-      <div className="flex items-center justify-between mb-2">
+     <div className="relative flex items-center justify-between mb-2 h-[70px]">
         <button
           onClick={onLogout}
           className="text-blue-500 text-[17px] font-bold"
@@ -364,7 +364,11 @@ setShowAddDriver(false)
           Logout
         </button>
 
-        <h1 className="text-[24px] font-black text-black">Boss Dashboard</h1>
+<img
+  src="/icon.clear.png"
+  alt="O'Neill Haulage"
+  className="absolute left-1/2 top-1/2 h-40 w-auto -translate-x-1/2 -translate-y-1/2"
+/>
 <button
   onClick={() => setShowBossMenu(true)}
   className="text-blue-500 text-[28px] font-black leading-none"
@@ -373,10 +377,7 @@ setShowAddDriver(false)
 </button>
       </div>
 
-      <p className="text-center text-[13px] text-zinc-400 mb-4">
-        {syncing ? "Syncing..." : syncText}
-      </p>
-
+  
       <div className="space-y-3">
         {visibleDrivers.map((driver) => {
           const isActive = driver.active !== false
