@@ -22,7 +22,7 @@ export default function LoginScreen({
   const [pin, setPin] = useState("")
   const [debug, setDebug] = useState("Waiting...")
 
- const login = async () => {
+const login = async () => {
   const cleanPin = pin.trim()
   setDebug("Checking...")
 
@@ -37,23 +37,28 @@ export default function LoginScreen({
     return
   }
 
-  if (!navigator.onLine) {
-    const savedDriverRaw = localStorage.getItem("lastDriver")
+  const savedDriversRaw = localStorage.getItem("oneill-drivers")
+  const savedDrivers: Driver[] = savedDriversRaw ? JSON.parse(savedDriversRaw) : []
 
-    if (!savedDriverRaw) {
-      setDebug("No internet. Login once online first.")
-      return
+  const savedDriver = savedDrivers.find(
+    (driver) => driver.pin === cleanPin && driver.active !== false
+  )
+
+  if (savedDriver) {
+    localStorage.setItem("lastDriver", JSON.stringify(savedDriver))
+
+    if (!navigator.onLine) {
+      setDebug("Offline driver login OK")
+    } else {
+      setDebug("Driver login OK")
     }
 
-    const savedDriver = JSON.parse(savedDriverRaw) as Driver
-
-    if (savedDriver.pin !== cleanPin) {
-      setDebug("No internet. Wrong saved PIN.")
-      return
-    }
-
-    setDebug("Offline driver login OK")
     onDriverLogin(savedDriver)
+    return
+  }
+
+  if (!navigator.onLine) {
+    setDebug("No internet. Driver not saved on this device.")
     return
   }
 
@@ -66,7 +71,6 @@ export default function LoginScreen({
 
   if (error) {
     setDebug("Supabase error: " + error.message)
-
     return
   }
 
