@@ -367,7 +367,7 @@ setShowAddDriver(false)
 <img
   src="/icon.clear.png"
   alt="O'Neill Haulage"
-  className="absolute left-1/2 top-1/2 h-40 w-auto -translate-x-1/2 -translate-y-1/2"
+  className="absolute left-1/2 top-1/2 h-35 w-auto -translate-x-1/2 -translate-y-1/2"
 />
 <button
   onClick={() => setShowBossMenu(true)}
