@@ -378,7 +378,7 @@ setShowAddDriver(false)
       </div>
 
   
-<div className="space-y-2">
+<div className="space-y-2 pb-[80px]">
   {visibleDrivers.map((driver) => {
     const isActive = driver.active !== false
 
@@ -441,7 +441,7 @@ setShowAddDriver(false)
 
   <button
     onClick={openAddDriver}
-    className="w-full h-[46px] rounded-[18px] bg-blue-500 text-white text-[17px] font-bold"
+    className="fixed bottom-4 left-4 right-4 z-[50] h-[46px] rounded-[18px] bg-blue-500 text-white text-[17px] font-bold"
   >
     + Add Driver
   </button>
