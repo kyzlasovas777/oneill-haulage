@@ -220,23 +220,33 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     loadAssignedTruck()
   }, [driverId])
 
-  const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
-    if (!entry.mileage || !entry.litres) return null
+const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
+  if (!entry.mileage || !entry.litres) return null
 
-    const sorted = [...allEntries]
-      .filter((item) => item.mileage !== null)
-      .sort((a, b) => (a.mileage ?? 0) - (b.mileage ?? 0))
+  const sorted = [...allEntries]
+    .filter((item) => item.mileage !== null)
+    .sort((a, b) => (a.mileage ?? 0) - (b.mileage ?? 0))
 
-    const index = sorted.findIndex((item) => item.id === entry.id)
-    const previous = sorted[index - 1]
+  const index = sorted.findIndex((item) => item.id === entry.id)
+  const previous = sorted[index - 1]
 
-    if (!previous?.mileage) return null
+  if (!previous?.mileage) return null
 
-    const distance = entry.mileage - previous.mileage
-    if (distance <= 0) return null
+  const miles = entry.mileage - previous.mileage
+  if (miles <= 0) return null
 
-    return (entry.litres / distance) * 100
+  const litresUsed = entry.litres
+  const ukGallons = litresUsed / 4.54609
+  const mpg = miles / ukGallons
+
+  const km = miles * 1.60934
+  const litresPer100km = (litresUsed / km) * 100
+
+  return {
+    mpg,
+    litresPer100km,
   }
+}
 
   const choosePhotos = (files: FileList | null) => {
     if (!files) return
@@ -625,11 +635,17 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
                     </b>
                   </div>
 
-                  {average !== null && (
-                    <div>
-                      Average: <b>{average.toFixed(1)} L/100km</b>
-                    </div>
-                  )}
+               {average !== null && (
+  <>
+    <div>
+      MPG: <b>{average.mpg.toFixed(1)}</b>
+    </div>
+
+    <div>
+      L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
+    </div>
+  </>
+)}
                 </div>
 
                 {entryPhotos.length > 0 && (
@@ -1015,11 +1031,17 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
                             </b>
                           </div>
 
-                          {average !== null && (
-                            <div>
-                              Average: <b>{average.toFixed(1)} L/100km</b>
-                            </div>
-                          )}
+                    {average !== null && (
+  <>
+    <div>
+      MPG: <b>{average.mpg.toFixed(1)}</b>
+    </div>
+
+    <div>
+      L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
+    </div>
+  </>
+)}
                         </div>
 
                         {entryPhotos.length > 0 && (
