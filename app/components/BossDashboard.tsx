@@ -355,8 +355,8 @@ setShowAddDriver(false)
   const visibleDrivers = sortDrivers(drivers)
 
   return (
-    <main className="min-h-screen bg-[#efeff4] px-4 pt-8">
-    <div className="relative flex items-center justify-between mb-2 h-[70px]">
+    <main className="min-h-screen bg-[#efeff4] px-4 pt-[120px]">
+   <div className="fixed top-0 left-0 right-0 z-[70] bg-[#efeff4] px-4 pt-8 h-[105px] flex items-center justify-between">
         <button
           onClick={onLogout}
           className="text-blue-500 text-[17px] font-bold"
@@ -367,7 +367,7 @@ setShowAddDriver(false)
 <img
   src="/icon.clear.png"
   alt="O'Neill Haulage"
-  className="absolute left-1/2 top-1/2 h-35 w-auto -translate-x-1/2 -translate-y-1/2"
+  className="absolute left-1/2 top-1/2 h-28 w-auto -translate-x-1/2 -translate-y-1/2"
 />
 <button
   onClick={() => setShowBossMenu(true)}
