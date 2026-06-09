@@ -1050,10 +1050,11 @@ setNewEntry({
 )}
 
 {screen === "diesel" && (
-<DieselPage
-  driverId={driverId}
-  onBack={() => setScreen("main")}
-/>
+  <DieselPage
+    driverId={driverId}
+    onBack={() => setScreen("main")}
+    isBoss={isBoss}
+  />
 )}
 
         {screen === "main" ? (

@@ -6,6 +6,7 @@ import { supabase } from "./supabase"
 type DieselPageProps = {
   driverId: number
   onBack: () => void
+  isBoss?: boolean
 }
 
 type DieselEntry = {
@@ -132,7 +133,11 @@ async function compressImage(file: File): Promise<File> {
   })
 }
 
-export default function DieselPage({ driverId, onBack }: DieselPageProps) {
+export default function DieselPage({
+  driverId,
+  onBack,
+  isBoss = false,
+}: DieselPageProps) {
   const [entries, setEntries] = useState<DieselEntry[]>([])
   const [photos, setPhotos] = useState<DieselPhoto[]>([])
 
@@ -635,7 +640,7 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
                     </b>
                   </div>
 
-               {average !== null && (
+             {isBoss && average !== null && (
   <>
     <div>
       MPG: <b>{average.mpg.toFixed(1)}</b>
@@ -1031,7 +1036,7 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
                             </b>
                           </div>
 
-                    {average !== null && (
+                   {isBoss && average !== null && (
   <>
     <div>
       MPG: <b>{average.mpg.toFixed(1)}</b>
