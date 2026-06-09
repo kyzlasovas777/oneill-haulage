@@ -356,7 +356,7 @@ setShowAddDriver(false)
 
   return (
     <main className="min-h-screen bg-[#efeff4] px-4 pt-[110px]">
- <div className="fixed top-0 left-0 right-0 z-[70] bg-[#efeff4] px-4 pt-4 h-[105px] flex items-center justify-between">
+ <div className="fixed top-0 left-0 right-0 z-[70] bg-[#efeff4] px-4 pt-4 h-[95px] flex items-center justify-between">
         <button
           onClick={onLogout}
           className="text-blue-500 text-[17px] font-bold"
