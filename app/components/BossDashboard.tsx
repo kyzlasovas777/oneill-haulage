@@ -23,6 +23,18 @@ type Entry = {
   note: string
 }
 
+type DieselEntry = {
+  id: number
+  driver_id: number
+  mileage: number | null
+  litres: number | null
+}
+
+type DieselStat = {
+  mpg: number
+  l100: number
+}
+
 type BossDashboardProps = {
   onLogout: () => void
   onOpenDriver: (driver: Driver) => void
@@ -82,6 +94,7 @@ export default function BossDashboard({
 const [driverTruck, setDriverTruck] = useState("")
 
 const [trucks, setTrucks] = useState<string[]>([])
+const [dieselStats, setDieselStats] = useState<Record<number, DieselStat>>({})
 
 const loadTrucks = async () => {
   const { data } = await supabase
@@ -91,6 +104,56 @@ const loadTrucks = async () => {
     .order("reg")
 
   setTrucks((data ?? []).map((t) => t.reg))
+}
+
+const loadDieselStats = async () => {
+  const { data, error } = await supabase
+    .from("diesel_entries")
+    .select("id, driver_id, mileage, litres")
+    .not("mileage", "is", null)
+    .not("litres", "is", null)
+    .order("driver_id")
+    .order("mileage")
+
+  if (error) {
+    console.log("DIESEL STATS ERROR:", error)
+    return
+  }
+
+  const grouped: Record<number, DieselEntry[]> = {}
+
+  ;(data ?? []).forEach((entry) => {
+    if (!grouped[entry.driver_id]) grouped[entry.driver_id] = []
+    grouped[entry.driver_id].push(entry)
+  })
+
+  const nextStats: Record<number, DieselStat> = {}
+
+  Object.entries(grouped).forEach(([driverIdText, driverEntries]) => {
+    const sorted = driverEntries.sort(
+      (a, b) => (a.mileage ?? 0) - (b.mileage ?? 0)
+    )
+
+    if (sorted.length < 2) return
+
+    const current = sorted[sorted.length - 1]
+    const previous = sorted[sorted.length - 2]
+
+    if (!current.mileage || !previous.mileage || !current.litres) return
+
+    const miles = current.mileage - previous.mileage
+    if (miles <= 0) return
+
+    const ukGallons = current.litres / 4.54609
+    const mpg = miles / ukGallons
+
+    const km = miles * 1.60934
+    const l100 = (current.litres / km) * 100
+
+    nextStats[Number(driverIdText)] = { mpg, l100 }
+  })
+
+  setDieselStats(nextStats)
 }
 
   const [syncText, setSyncText] = useState("Offline ready")
@@ -236,9 +299,10 @@ const loadTrucks = async () => {
     setSyncText("Loaded from Supabase")
   }
 
-  useEffect(() => {
-    loadFromSupabase()
-    loadTrucks()
+useEffect(() => {
+  loadFromSupabase()
+  loadTrucks()
+  loadDieselStats()
 
     const handleOnline = () => {
       syncDrivers()
@@ -397,11 +461,24 @@ setShowAddDriver(false)
             {driver.syncStatus === "pending" ? " ⏳" : ""}
           </p>
 
-          {driver.truckReg && (
-            <p className="text-[15px] font-extrabold text-black">
-              {driver.truckReg}
-            </p>
-          )}
+       <div className="text-right">
+  <p className="text-[15px] font-extrabold text-black">
+    {driver.truckReg}
+  </p>
+
+{dieselStats[driver.id] && (
+  <>
+    <p className="text-[12px] text-zinc-500">
+      MPG: {dieselStats[driver.id].mpg.toFixed(1)}
+    </p>
+
+    <p className="text-[12px] text-zinc-500">
+      {dieselStats[driver.id].l100.toFixed(1)} L/100km
+    </p>
+  </>
+)}
+ 
+</div>
         </div>
 
         <p className="text-[13px] text-zinc-400 leading-tight">

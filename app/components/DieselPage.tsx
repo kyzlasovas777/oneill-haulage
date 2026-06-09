@@ -225,31 +225,24 @@ export default function DieselPage({
     loadAssignedTruck()
   }, [driverId])
 
-const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
-  if (!entry.mileage || !entry.litres) return null
+const getDieselAverageFromPrevious = (
+  current: DieselEntry,
+  previous: DieselEntry
+) => {
+  if (!current.mileage || !previous.mileage || !current.litres) return null
 
-  const sorted = [...allEntries]
-    .filter((item) => item.mileage !== null)
-    .sort((a, b) => (a.mileage ?? 0) - (b.mileage ?? 0))
-
-  const index = sorted.findIndex((item) => item.id === entry.id)
-  const previous = sorted[index - 1]
-
-  if (!previous?.mileage) return null
-
-  const miles = entry.mileage - previous.mileage
+  const miles = current.mileage - previous.mileage
   if (miles <= 0) return null
 
-  const litresUsed = entry.litres
-  const ukGallons = litresUsed / 4.54609
+  const ukGallons = current.litres / 4.54609
   const mpg = miles / ukGallons
 
   const km = miles * 1.60934
-  const litresPer100km = (litresUsed / km) * 100
+  const l100 = (current.litres / km) * 100
 
   return {
     mpg,
-    litresPer100km,
+    litresPer100km: l100,
   }
 }
 
@@ -555,9 +548,13 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
     closeEdit()
   }
 
-  const currentWeekEntries = entries
-    .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
-    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+const currentWeekEntries = entries
+  .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
+  .sort(
+    (a, b) =>
+      new Date(a.created_at ?? "").getTime() -
+      new Date(b.created_at ?? "").getTime()
+  )
 
   const weekLitres = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.litres ?? 0),
@@ -575,11 +572,13 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
 
   const archiveTitles = Object.keys(archiveWeeks)
 
-  const visibleArchiveEntries = activeArchiveWeek
-    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
-        a.entry_date.localeCompare(b.entry_date)
-      )
-    : []
+const visibleArchiveEntries = activeArchiveWeek
+  ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort(
+      (a, b) =>
+        new Date(a.created_at ?? "").getTime() -
+        new Date(b.created_at ?? "").getTime()
+    )
+  : []
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
@@ -610,9 +609,12 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
       </div>
 
       <div className="mt-5 space-y-3">
-        {currentWeekEntries.map((entry) => {
-          const entryPhotos = getEntryPhotos(entry.id)
-          const average = getDieselAverage(entry, entries)
+    {currentWeekEntries.map((entry, index) => {
+  const entryPhotos = getEntryPhotos(entry.id)
+  const previousEntry = index > 0 ? currentWeekEntries[index - 1] : null
+  const average = previousEntry
+    ? getDieselAverageFromPrevious(entry, previousEntry)
+    : null
 
           return (
             <button
@@ -1003,9 +1005,12 @@ const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
 
             {activeArchiveWeek && (
               <div className="space-y-3">
-                {visibleArchiveEntries.map((entry) => {
-                  const entryPhotos = getEntryPhotos(entry.id)
-                  const average = getDieselAverage(entry, entries)
+            {visibleArchiveEntries.map((entry, index) => {
+  const entryPhotos = getEntryPhotos(entry.id)
+  const previousEntry = index > 0 ? visibleArchiveEntries[index - 1] : null
+  const average = previousEntry
+    ? getDieselAverageFromPrevious(entry, previousEntry)
+    : null
 
                   return (
                     <button
