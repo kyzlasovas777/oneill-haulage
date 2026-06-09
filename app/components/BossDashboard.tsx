@@ -378,7 +378,7 @@ setShowAddDriver(false)
       </div>
 
   
-<div className="space-y-1.5">
+<div className="space-y-2">
   {visibleDrivers.map((driver) => {
     const isActive = driver.active !== false
 
@@ -386,39 +386,39 @@ setShowAddDriver(false)
       <div
         key={`${driver.id}-${refreshKey}`}
         onClick={() => onOpenDriver(driver)}
-        className={`rounded-[16px] px-3 py-2 active:scale-[0.98] transition-all ${
+        className={`rounded-[18px] p-3 active:scale-[0.98] transition-all ${
           isActive ? "bg-white" : "bg-zinc-200 opacity-70"
         }`}
       >
         <div className="flex items-center justify-between">
-          <p className="text-[16px] font-bold text-black leading-tight">
+          <p className="text-[18px] font-bold text-black leading-tight">
             {isActive ? "🟢 " : "⚫ "}
             {driver.name}
             {driver.syncStatus === "pending" ? " ⏳" : ""}
           </p>
 
           {driver.truckReg && (
-            <p className="text-[14px] font-extrabold text-black">
+            <p className="text-[15px] font-extrabold text-black">
               {driver.truckReg}
             </p>
           )}
         </div>
 
-        <p className="text-[12px] text-zinc-400 leading-tight">
+        <p className="text-[13px] text-zinc-400 leading-tight">
           PIN: {driver.pin}
         </p>
 
-        <p className="text-[12px] text-zinc-400 mb-1.5 leading-tight">
+        <p className="text-[13px] text-zinc-400 mb-2 leading-tight">
           This week rows: {getDriverRows(driver.id)}
         </p>
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation()
               openEditDriver(driver)
             }}
-            className="flex-1 h-[30px] rounded-[12px] bg-blue-500 text-white text-[13px] font-bold"
+            className="flex-1 h-[34px] rounded-[14px] bg-blue-500 text-white text-[14px] font-bold"
           >
             Edit
           </button>
@@ -428,7 +428,7 @@ setShowAddDriver(false)
               e.stopPropagation()
               toggleDriverActive(driver)
             }}
-            className={`flex-1 h-[30px] rounded-[12px] text-white text-[13px] font-bold ${
+            className={`flex-1 h-[34px] rounded-[14px] text-white text-[14px] font-bold ${
               isActive ? "bg-zinc-500" : "bg-green-500"
             }`}
           >
@@ -441,7 +441,7 @@ setShowAddDriver(false)
 
   <button
     onClick={openAddDriver}
-    className="w-full h-[42px] rounded-[16px] bg-blue-500 text-white text-[16px] font-bold"
+    className="w-full h-[46px] rounded-[18px] bg-blue-500 text-white text-[17px] font-bold"
   >
     + Add Driver
   </button>
