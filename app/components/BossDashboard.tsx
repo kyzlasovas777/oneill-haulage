@@ -355,7 +355,7 @@ setShowAddDriver(false)
   const visibleDrivers = sortDrivers(drivers)
 
   return (
-    <main className="min-h-screen bg-[#efeff4] px-4 pt-[110px]">
+    <main className="min-h-screen bg-[#efeff4] px-4 pt-[80px]">
  <div className="fixed top-0 left-0 right-0 z-[70] bg-[#efeff4] px-4 pt-4 h-[80px] flex items-center justify-between">
         <button
           onClick={onLogout}
