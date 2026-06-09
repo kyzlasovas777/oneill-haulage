@@ -454,30 +454,25 @@ setShowAddDriver(false)
           isActive ? "bg-white" : "bg-zinc-200 opacity-70"
         }`}
       >
-        <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
           <p className="text-[18px] font-bold text-black leading-tight">
             {isActive ? "🟢 " : "⚫ "}
             {driver.name}
             {driver.syncStatus === "pending" ? " ⏳" : ""}
           </p>
 
-       <div className="text-right">
+<div className="text-right mt-[14px]">
   <p className="text-[15px] font-extrabold text-black">
     {driver.truckReg}
   </p>
 
-{dieselStats[driver.id] && (
-  <>
+  {dieselStats[driver.id] && (
+    <>
     <p className="text-[12px] text-zinc-500">
-      MPG: {dieselStats[driver.id].mpg.toFixed(1)}
-    </p>
-
-    <p className="text-[12px] text-zinc-500">
-      {dieselStats[driver.id].l100.toFixed(1)} L/100km
-    </p>
-  </>
-)}
- 
+  {dieselStats[driver.id].mpg.toFixed(1)} MPG • {dieselStats[driver.id].l100.toFixed(1)} L/100km
+</p>
+    </>
+  )}
 </div>
         </div>
 
