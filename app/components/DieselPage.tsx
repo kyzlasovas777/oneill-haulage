@@ -14,6 +14,7 @@ type DieselEntry = {
   entry_date: string
   mileage: number | null
   litres: number | null
+  reg_number: string | null
   photo_url?: string | null
   photo_path?: string | null
   created_at?: string
@@ -135,6 +136,11 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
   const [entries, setEntries] = useState<DieselEntry[]>([])
   const [photos, setPhotos] = useState<DieselPhoto[]>([])
 
+  const [trucks, setTrucks] = useState<any[]>([])
+  const [assignedReg, setAssignedReg] = useState("")
+  const [regNumber, setRegNumber] = useState("")
+  const [editRegNumber, setEditRegNumber] = useState("")
+
   const [mileage, setMileage] = useState("")
   const [litres, setLitres] = useState("")
   const [saving, setSaving] = useState(false)
@@ -193,9 +199,44 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     setPhotos(photoData ?? [])
   }
 
+  const loadTrucks = async () => {
+    const { data } = await supabase.from("trucks").select("*").order("reg")
+    setTrucks(data ?? [])
+  }
+
+  const loadAssignedTruck = async () => {
+    const { data } = await supabase
+      .from("drivers")
+      .select("truck_reg")
+      .eq("id", driverId)
+      .single()
+
+    setAssignedReg(data?.truck_reg ?? "")
+  }
+
   useEffect(() => {
     loadDieselEntries()
+    loadTrucks()
+    loadAssignedTruck()
   }, [driverId])
+
+  const getDieselAverage = (entry: DieselEntry, allEntries: DieselEntry[]) => {
+    if (!entry.mileage || !entry.litres) return null
+
+    const sorted = [...allEntries]
+      .filter((item) => item.mileage !== null)
+      .sort((a, b) => (a.mileage ?? 0) - (b.mileage ?? 0))
+
+    const index = sorted.findIndex((item) => item.id === entry.id)
+    const previous = sorted[index - 1]
+
+    if (!previous?.mileage) return null
+
+    const distance = entry.mileage - previous.mileage
+    if (distance <= 0) return null
+
+    return (entry.litres / distance) * 100
+  }
 
   const choosePhotos = (files: FileList | null) => {
     if (!files) return
@@ -309,6 +350,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     setEditingEntry(entry)
     setEditMileage(entry.mileage === null ? "" : String(entry.mileage))
     setEditLitres(entry.litres === null ? "" : String(entry.litres))
+    setEditRegNumber(entry.reg_number ?? "")
     clearEditPhotos()
   }
 
@@ -316,6 +358,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     setEditingEntry(null)
     setEditMileage("")
     setEditLitres("")
+    setEditRegNumber("")
     clearEditPhotos()
   }
 
@@ -350,6 +393,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
           entry_date: today,
           mileage: mileageNumber,
           litres: litresNumber,
+          reg_number: regNumber || assignedReg || null,
           photo_url: null,
           photo_path: null,
         })
@@ -370,6 +414,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
 
       setMileage("")
       setLitres("")
+      setRegNumber("")
       clearPhotos()
       setAddOpen(false)
     } catch (error) {
@@ -416,6 +461,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
         .update({
           mileage: mileageNumber,
           litres: litresNumber,
+          reg_number: editRegNumber || null,
         })
         .eq("id", editingEntry.id)
         .select()
@@ -494,9 +540,9 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
     closeEdit()
   }
 
-  const currentWeekEntries = entries.filter(
-    (entry) => getWeekTitle(entry.entry_date) === currentWeekTitle
-  )
+  const currentWeekEntries = entries
+    .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
 
   const weekLitres = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.litres ?? 0),
@@ -515,7 +561,9 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
   const archiveTitles = Object.keys(archiveWeeks)
 
   const visibleArchiveEntries = activeArchiveWeek
-    ? archiveWeeks[activeArchiveWeek] ?? []
+    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
+        a.entry_date.localeCompare(b.entry_date)
+      )
     : []
 
   return (
@@ -549,6 +597,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
       <div className="mt-5 space-y-3">
         {currentWeekEntries.map((entry) => {
           const entryPhotos = getEntryPhotos(entry.id)
+          const average = getDieselAverage(entry, entries)
 
           return (
             <button
@@ -558,7 +607,10 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="pl-2">
-                  <div>{displayDate(entry.entry_date)}</div>
+                  <div className="flex gap-2">
+                    <span>{displayDate(entry.entry_date)}</span>
+                    <b>{entry.reg_number ?? assignedReg}</b>
+                  </div>
 
                   <div>
                     Mileage: <b>{entry.mileage ?? "-"}</b>
@@ -572,6 +624,12 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
                         : `${Number(entry.litres).toFixed(2)} L`}
                     </b>
                   </div>
+
+                  {average !== null && (
+                    <div>
+                      Average: <b>{average.toFixed(1)} L/100km</b>
+                    </div>
+                  )}
                 </div>
 
                 {entryPhotos.length > 0 && (
@@ -601,6 +659,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
           onClick={() => {
             setMileage("")
             setLitres("")
+            setRegNumber(assignedReg)
             clearPhotos()
             setAddOpen(true)
           }}
@@ -622,6 +681,20 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
             <h2 className="text-[22px] font-bold mb-3">Fill Up Diesel</h2>
 
             <div className="space-y-3">
+              <select
+                value={regNumber}
+                onChange={(e) => setRegNumber(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              >
+                <option value="">Select Reg</option>
+
+                {trucks.map((truck) => (
+                  <option key={truck.id} value={truck.reg}>
+                    {truck.reg}
+                  </option>
+                ))}
+              </select>
+
               <input
                 type="number"
                 placeholder="Mileage"
@@ -689,6 +762,7 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
                     clearPhotos()
                     setMileage("")
                     setLitres("")
+                    setRegNumber("")
                   }}
                   className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
                 >
@@ -724,6 +798,20 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
             </div>
 
             <div className="space-y-3">
+              <select
+                value={editRegNumber}
+                onChange={(e) => setEditRegNumber(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              >
+                <option value="">Select Reg</option>
+
+                {trucks.map((truck) => (
+                  <option key={truck.id} value={truck.reg}>
+                    {truck.reg}
+                  </option>
+                ))}
+              </select>
+
               <input
                 type="number"
                 placeholder="Mileage"
@@ -836,15 +924,32 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
       {archiveOpen && (
         <div
           onClick={() => setArchiveOpen(false)}
-          className="fixed inset-0 z-[105] bg-black/40 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[105] bg-[#efeff4]"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[380px] max-h-[85vh] overflow-y-auto bg-white rounded-[22px] p-4"
+            className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
           >
-            <h2 className="text-[22px] font-bold mb-3">
-              {activeArchiveWeek ? activeArchiveWeek : "Diesel Archive"}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => {
+                  if (activeArchiveWeek) {
+                    setActiveArchiveWeek(null)
+                  } else {
+                    setArchiveOpen(false)
+                  }
+                }}
+                className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
+              >
+                Back
+              </button>
+
+              <h2 className="text-[22px] font-bold">
+                {activeArchiveWeek ? activeArchiveWeek : "Diesel Archive"}
+              </h2>
+
+              <div className="w-[70px]" />
+            </div>
 
             {!activeArchiveWeek && (
               <div className="space-y-2">
@@ -875,74 +980,70 @@ export default function DieselPage({ driverId, onBack }: DieselPageProps) {
               </div>
             )}
 
-{activeArchiveWeek && (
-  <div className="space-y-3">
-    <button
-      onClick={() => setActiveArchiveWeek(null)}
-      className="h-[38px] px-4 rounded-[12px] bg-zinc-200 font-bold mb-2"
-    >
-      Back to weeks
-    </button>
+            {activeArchiveWeek && (
+              <div className="space-y-3">
+                {visibleArchiveEntries.map((entry) => {
+                  const entryPhotos = getEntryPhotos(entry.id)
+                  const average = getDieselAverage(entry, entries)
 
-    {visibleArchiveEntries.map((entry) => {
-      const entryPhotos = getEntryPhotos(entry.id)
+                  return (
+                    <button
+                      key={entry.id}
+                      onClick={() => {
+                        setArchiveOpen(false)
+                        openEdit(entry)
+                      }}
+                      className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="pl-2">
+                          <div className="flex gap-2">
+                            <span>{displayDate(entry.entry_date)}</span>
+                            <b>{entry.reg_number ?? assignedReg}</b>
+                          </div>
 
-      return (
-        <button
-          key={entry.id}
-          onClick={() => {
-            setArchiveOpen(false)
-            openEdit(entry)
-          }}
-          className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="pl-2">
-              <div>{displayDate(entry.entry_date)}</div>
+                          <div>
+                            Mileage: <b>{entry.mileage ?? "-"}</b>
+                          </div>
 
-              <div>
-                Mileage: <b>{entry.mileage ?? "-"}</b>
-              </div>
+                          <div>
+                            Litres:{" "}
+                            <b>
+                              {entry.litres === null
+                                ? "-"
+                                : `${Number(entry.litres).toFixed(2)} L`}
+                            </b>
+                          </div>
 
-              <div>
-                Litres:{" "}
-                <b>
-                  {entry.litres === null
-                    ? "-"
-                    : `${Number(entry.litres).toFixed(2)} L`}
-                </b>
-              </div>
-            </div>
+                          {average !== null && (
+                            <div>
+                              Average: <b>{average.toFixed(1)} L/100km</b>
+                            </div>
+                          )}
+                        </div>
 
-            {entryPhotos.length > 0 && (
-              <div className="flex gap-1 shrink-0">
-                {entryPhotos.slice(0, 3).map((photo) => (
-                  <img
-                    key={photo.id}
-                    src={photo.photo_url}
-                    alt="Diesel receipt"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setOpenPhoto(photo.photo_url)
-                    }}
-                    className="h-[46px] w-[46px] rounded-[9px] object-cover"
-                  />
-                ))}
+                        {entryPhotos.length > 0 && (
+                          <div className="flex gap-1 shrink-0">
+                            {entryPhotos.slice(0, 3).map((photo) => (
+                              <img
+                                key={photo.id}
+                                src={photo.photo_url}
+                                alt="Diesel receipt"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenPhoto(photo.photo_url)
+                                }}
+                                className="h-[46px] w-[46px] rounded-[9px] object-cover"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
-          </div>
-        </button>
-      )
-    })}
-  </div>
-)}
-
-            <button
-              onClick={() => setArchiveOpen(false)}
-              className="w-full h-[42px] rounded-[14px] bg-blue-600 text-white font-bold mt-4"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}

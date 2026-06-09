@@ -349,9 +349,9 @@ useEffect(() => {
     closeEdit()
   }
 
-  const currentWeekEntries = entries.filter(
-    (entry) => getWeekTitle(entry.entry_date) === currentWeekTitle
-  )
+ const currentWeekEntries = entries
+  .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
+  .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
 
   const weekTotal = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.total_miles ?? 0),
@@ -369,9 +369,11 @@ useEffect(() => {
 
   const archiveTitles = Object.keys(archiveWeeks)
 
-  const visibleArchiveEntries = activeArchiveWeek
-    ? archiveWeeks[activeArchiveWeek] ?? []
-    : []
+const visibleArchiveEntries = activeArchiveWeek
+  ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
+      a.entry_date.localeCompare(b.entry_date)
+    )
+  : []
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
@@ -624,15 +626,32 @@ useEffect(() => {
       {archiveOpen && (
         <div
           onClick={() => setArchiveOpen(false)}
-          className="fixed inset-0 z-[105] bg-black/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[105] bg-[#efeff4]"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[380px] max-h-[85vh] overflow-y-auto bg-white rounded-[22px] p-4"
+      className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
           >
-            <h2 className="text-[22px] font-bold mb-3">
-              {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
-            </h2>
+         <div className="flex items-center justify-between mb-4">
+  <button
+    onClick={() => {
+      if (activeArchiveWeek) {
+        setActiveArchiveWeek(null)
+      } else {
+        setArchiveOpen(false)
+      }
+    }}
+    className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
+  >
+    Back
+  </button>
+
+  <h2 className="text-[22px] font-bold">
+    {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
+  </h2>
+
+  <div className="w-[70px]" />
+</div>
 
             {!activeArchiveWeek && (
               <div className="space-y-2">
@@ -697,12 +716,7 @@ useEffect(() => {
               </div>
             )}
 
-            <button
-              onClick={() => setArchiveOpen(false)}
-              className="w-full h-[42px] rounded-[14px] bg-blue-600 text-white font-bold mt-4"
-            >
-              Close
-            </button>
+         
           </div>
         </div>
       )}
