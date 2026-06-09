@@ -378,72 +378,74 @@ setShowAddDriver(false)
       </div>
 
   
-      <div className="space-y-3">
-        {visibleDrivers.map((driver) => {
-          const isActive = driver.active !== false
+<div className="space-y-1.5">
+  {visibleDrivers.map((driver) => {
+    const isActive = driver.active !== false
 
-          return (
-            <div
-              key={`${driver.id}-${refreshKey}`}
-              onClick={() => onOpenDriver(driver)}
-              className={`rounded-[22px] p-4 active:scale-[0.98] transition-all ${
-                isActive ? "bg-white" : "bg-zinc-200 opacity-70"
-              }`}
-            >
-            <div className="flex items-center justify-between">
-  <p className="text-[20px] font-bold text-black">
-    {isActive ? "🟢 " : "⚫ "}
-    {driver.name}
-    {driver.syncStatus === "pending" ? " ⏳" : ""}
-  </p>
+    return (
+      <div
+        key={`${driver.id}-${refreshKey}`}
+        onClick={() => onOpenDriver(driver)}
+        className={`rounded-[16px] px-3 py-2 active:scale-[0.98] transition-all ${
+          isActive ? "bg-white" : "bg-zinc-200 opacity-70"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[16px] font-bold text-black leading-tight">
+            {isActive ? "🟢 " : "⚫ "}
+            {driver.name}
+            {driver.syncStatus === "pending" ? " ⏳" : ""}
+          </p>
 
-  {driver.truckReg && (
-  <p className="text-[16px] font-extrabold text-black">
-  {driver.truckReg}
-</p>
-  )}
-</div>
+          {driver.truckReg && (
+            <p className="text-[14px] font-extrabold text-black">
+              {driver.truckReg}
+            </p>
+          )}
+        </div>
 
-              <p className="text-[14px] text-zinc-400">PIN: {driver.pin}</p>
+        <p className="text-[12px] text-zinc-400 leading-tight">
+          PIN: {driver.pin}
+        </p>
 
-              <p className="text-[14px] text-zinc-400 mb-3">
-                This week rows: {getDriverRows(driver.id)}
-              </p>
+        <p className="text-[12px] text-zinc-400 mb-1.5 leading-tight">
+          This week rows: {getDriverRows(driver.id)}
+        </p>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openEditDriver(driver)
-                  }}
-                  className="flex-1 h-[40px] rounded-[16px] bg-blue-500 text-white text-[15px] font-bold"
-                >
-                  Edit
-                </button>
+        <div className="flex gap-1.5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              openEditDriver(driver)
+            }}
+            className="flex-1 h-[30px] rounded-[12px] bg-blue-500 text-white text-[13px] font-bold"
+          >
+            Edit
+          </button>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDriverActive(driver)
-                  }}
-                  className={`flex-1 h-[40px] rounded-[16px] text-white text-[15px] font-bold ${
-                    isActive ? "bg-zinc-500" : "bg-green-500"
-                  }`}
-                >
-                  {isActive ? "Disable" : "Enable"}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-
-        <button
-          onClick={openAddDriver}
-          className="w-full h-[52px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold"
-        >
-          + Add Driver
-        </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleDriverActive(driver)
+            }}
+            className={`flex-1 h-[30px] rounded-[12px] text-white text-[13px] font-bold ${
+              isActive ? "bg-zinc-500" : "bg-green-500"
+            }`}
+          >
+            {isActive ? "Disable" : "Enable"}
+          </button>
+        </div>
       </div>
+    )
+  })}
+
+  <button
+    onClick={openAddDriver}
+    className="w-full h-[42px] rounded-[16px] bg-blue-500 text-white text-[16px] font-bold"
+  >
+    + Add Driver
+  </button>
+</div>
 
   {showBossMenu && (
   <div
