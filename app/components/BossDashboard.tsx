@@ -26,9 +26,12 @@ type Entry = {
 type DieselEntry = {
   id: number
   driver_id: number
+  reg_number: string | null
   mileage: number | null
   litres: number | null
+  created_at?: string
 }
+
 
 type DieselStat = {
   mpg: number
@@ -94,7 +97,8 @@ export default function BossDashboard({
 const [driverTruck, setDriverTruck] = useState("")
 
 const [trucks, setTrucks] = useState<string[]>([])
-const [dieselStats, setDieselStats] = useState<Record<number, DieselStat>>({})
+const [dieselStats, setDieselStats] =
+  useState<Record<string, DieselStat>>({})
 
 const loadTrucks = async () => {
   const { data } = await supabase
@@ -109,29 +113,34 @@ const loadTrucks = async () => {
 const loadDieselStats = async () => {
   const { data, error } = await supabase
     .from("diesel_entries")
-    .select("id, driver_id, mileage, litres")
+    .select("id, driver_id, reg_number, mileage, litres, created_at")
+    .not("reg_number", "is", null)
     .not("mileage", "is", null)
     .not("litres", "is", null)
-    .order("driver_id")
-    .order("mileage")
+    .order("created_at", { ascending: true })
 
   if (error) {
     console.log("DIESEL STATS ERROR:", error)
     return
   }
 
-  const grouped: Record<number, DieselEntry[]> = {}
+  const grouped: Record<string, DieselEntry[]> = {}
 
   ;(data ?? []).forEach((entry) => {
-    if (!grouped[entry.driver_id]) grouped[entry.driver_id] = []
-    grouped[entry.driver_id].push(entry)
+    const reg = entry.reg_number?.trim()
+    if (!reg) return
+
+    if (!grouped[reg]) grouped[reg] = []
+    grouped[reg].push(entry)
   })
 
-  const nextStats: Record<number, DieselStat> = {}
+  const nextStats: Record<string, DieselStat> = {}
 
-  Object.entries(grouped).forEach(([driverIdText, driverEntries]) => {
-    const sorted = driverEntries.sort(
-      (a, b) => (a.mileage ?? 0) - (b.mileage ?? 0)
+  Object.entries(grouped).forEach(([reg, truckEntries]) => {
+    const sorted = truckEntries.sort(
+      (a, b) =>
+        new Date(a.created_at ?? "").getTime() -
+        new Date(b.created_at ?? "").getTime()
     )
 
     if (sorted.length < 2) return
@@ -150,12 +159,11 @@ const loadDieselStats = async () => {
     const km = miles * 1.60934
     const l100 = (current.litres / km) * 100
 
-    nextStats[Number(driverIdText)] = { mpg, l100 }
+    nextStats[reg] = { mpg, l100 }
   })
 
   setDieselStats(nextStats)
 }
-
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
 
@@ -466,13 +474,13 @@ setShowAddDriver(false)
     {driver.truckReg}
   </p>
 
-  {dieselStats[driver.id] && (
-    <>
+{driver.truckReg && dieselStats[driver.truckReg] && (
+  <>
     <p className="text-[12px] text-zinc-500">
-  {dieselStats[driver.id].mpg.toFixed(1)} MPG • {dieselStats[driver.id].l100.toFixed(1)} L/100km
-</p>
-    </>
-  )}
+      {dieselStats[driver.truckReg].mpg.toFixed(1)} MPG • {dieselStats[driver.truckReg].l100.toFixed(1)} L/100km
+    </p>
+  </>
+)}
 </div>
         </div>
 
