@@ -79,6 +79,14 @@ function getWeekTitle(dateText: string) {
   return `${formatShort(monday)}-${formatShort(sunday)}`
 }
 
+function getEntryTime(entry: DieselEntry) {
+  return new Date(entry.created_at ?? "").getTime()
+}
+
+function normalizeReg(reg: string | null | undefined) {
+  return (reg ?? "").trim().toUpperCase()
+}
+
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/")) return file
 
@@ -139,6 +147,7 @@ export default function DieselPage({
   isBoss = false,
 }: DieselPageProps) {
   const [entries, setEntries] = useState<DieselEntry[]>([])
+  const [allDieselEntries, setAllDieselEntries] = useState<DieselEntry[]>([])
   const [photos, setPhotos] = useState<DieselPhoto[]>([])
 
   const [trucks, setTrucks] = useState<any[]>([])
@@ -179,8 +188,6 @@ export default function DieselPage({
     const { data, error } = await supabase
       .from("diesel_entries")
       .select("*")
-      .eq("driver_id", driverId)
-      .order("entry_date", { ascending: false })
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -188,7 +195,9 @@ export default function DieselPage({
       return
     }
 
-    setEntries(data ?? [])
+    const allRows = data ?? []
+    setAllDieselEntries(allRows)
+    setEntries(allRows.filter((entry) => entry.driver_id === driverId))
 
     const { data: photoData, error: photoError } = await supabase
       .from("diesel_photos")
@@ -225,26 +234,56 @@ export default function DieselPage({
     loadAssignedTruck()
   }, [driverId])
 
-const getDieselAverageFromPrevious = (
-  current: DieselEntry,
-  previous: DieselEntry
-) => {
-  if (!current.mileage || !previous.mileage || !current.litres) return null
+  const findPreviousEntryForSameTruck = (current: DieselEntry) => {
+    const currentReg = normalizeReg(current.reg_number)
+    const currentTime = getEntryTime(current)
 
-  const miles = current.mileage - previous.mileage
-  if (miles <= 0) return null
+    if (!currentReg || !current.created_at) return null
 
-  const ukGallons = current.litres / 4.54609
-  const mpg = miles / ukGallons
+    return (
+      allDieselEntries
+        .filter((entry) => {
+          const sameTruck = normalizeReg(entry.reg_number) === currentReg
+          const isOlder =
+            getEntryTime(entry) < currentTime ||
+            (getEntryTime(entry) === currentTime && entry.id < current.id)
 
-  const km = miles * 1.60934
-  const l100 = (current.litres / km) * 100
-
-  return {
-    mpg,
-    litresPer100km: l100,
+          return (
+            entry.id !== current.id &&
+            sameTruck &&
+            isOlder &&
+            entry.mileage !== null
+          )
+        })
+        .sort((a, b) => {
+          const timeDiff = getEntryTime(b) - getEntryTime(a)
+          if (timeDiff !== 0) return timeDiff
+          return b.id - a.id
+        })[0] ?? null
+    )
   }
-}
+
+  const getDieselAverageFromPrevious = (
+    current: DieselEntry,
+    previous: DieselEntry | null
+  ) => {
+    if (!previous) return null
+    if (!current.mileage || !previous.mileage || !current.litres) return null
+
+    const miles = current.mileage - previous.mileage
+    if (miles <= 0) return null
+
+    const ukGallons = current.litres / 4.54609
+    const mpg = miles / ukGallons
+
+    const km = miles * 1.60934
+    const l100 = (current.litres / km) * 100
+
+    return {
+      mpg,
+      litresPer100km: l100,
+    }
+  }
 
   const choosePhotos = (files: FileList | null) => {
     if (!files) return
@@ -380,6 +419,7 @@ const getDieselAverageFromPrevious = (
 
     const mileageNumber = mileage ? Number(mileage) : null
     const litresNumber = litres ? Number(litres) : null
+    const selectedReg = regNumber || assignedReg || null
 
     if (mileageNumber !== null && mileageNumber <= 0) {
       alert("Mileage must be higher than 0")
@@ -401,7 +441,7 @@ const getDieselAverageFromPrevious = (
           entry_date: today,
           mileage: mileageNumber,
           litres: litresNumber,
-          reg_number: regNumber || assignedReg || null,
+          reg_number: selectedReg,
           photo_url: null,
           photo_path: null,
         })
@@ -417,6 +457,7 @@ const getDieselAverageFromPrevious = (
 
       if (data) {
         setEntries((prev) => [data, ...prev])
+        setAllDieselEntries((prev) => [data, ...prev])
         await uploadAndInsertPhotos(data.id, photoFiles)
       }
 
@@ -487,6 +528,10 @@ const getDieselAverageFromPrevious = (
           prev.map((entry) => (entry.id === data.id ? data : entry))
         )
 
+        setAllDieselEntries((prev) =>
+          prev.map((entry) => (entry.id === data.id ? data : entry))
+        )
+
         await uploadAndInsertPhotos(data.id, editPhotoFiles)
       }
 
@@ -544,17 +589,18 @@ const getDieselAverageFromPrevious = (
     }
 
     setEntries((prev) => prev.filter((entry) => entry.id !== id))
+    setAllDieselEntries((prev) => prev.filter((entry) => entry.id !== id))
     setPhotos((prev) => prev.filter((photo) => photo.diesel_entry_id !== id))
     closeEdit()
   }
 
-const currentWeekEntries = entries
-  .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
-  .sort(
-    (a, b) =>
-      new Date(a.created_at ?? "").getTime() -
-      new Date(b.created_at ?? "").getTime()
-  )
+  const currentWeekEntries = entries
+    .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
+    .sort((a, b) => {
+      const timeDiff = getEntryTime(a) - getEntryTime(b)
+      if (timeDiff !== 0) return timeDiff
+      return a.id - b.id
+    })
 
   const weekLitres = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.litres ?? 0),
@@ -572,13 +618,13 @@ const currentWeekEntries = entries
 
   const archiveTitles = Object.keys(archiveWeeks)
 
-const visibleArchiveEntries = activeArchiveWeek
-  ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort(
-      (a, b) =>
-        new Date(a.created_at ?? "").getTime() -
-        new Date(b.created_at ?? "").getTime()
-    )
-  : []
+  const visibleArchiveEntries = activeArchiveWeek
+    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) => {
+        const timeDiff = getEntryTime(a) - getEntryTime(b)
+        if (timeDiff !== 0) return timeDiff
+        return a.id - b.id
+      })
+    : []
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
@@ -609,12 +655,10 @@ const visibleArchiveEntries = activeArchiveWeek
       </div>
 
       <div className="mt-5 space-y-3">
-    {currentWeekEntries.map((entry, index) => {
-  const entryPhotos = getEntryPhotos(entry.id)
-  const previousEntry = index > 0 ? currentWeekEntries[index - 1] : null
-  const average = previousEntry
-    ? getDieselAverageFromPrevious(entry, previousEntry)
-    : null
+        {currentWeekEntries.map((entry) => {
+          const entryPhotos = getEntryPhotos(entry.id)
+          const previousEntry = findPreviousEntryForSameTruck(entry)
+          const average = getDieselAverageFromPrevious(entry, previousEntry)
 
           return (
             <button
@@ -642,17 +686,17 @@ const visibleArchiveEntries = activeArchiveWeek
                     </b>
                   </div>
 
-             {isBoss && average !== null && (
-  <>
-    <div>
-      MPG: <b>{average.mpg.toFixed(1)}</b>
-    </div>
+                  {isBoss && average !== null && (
+                    <>
+                      <div>
+                        MPG: <b>{average.mpg.toFixed(1)}</b>
+                      </div>
 
-    <div>
-      L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
-    </div>
-  </>
-)}
+                      <div>
+                        L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {entryPhotos.length > 0 && (
@@ -1005,12 +1049,13 @@ const visibleArchiveEntries = activeArchiveWeek
 
             {activeArchiveWeek && (
               <div className="space-y-3">
-            {visibleArchiveEntries.map((entry, index) => {
-  const entryPhotos = getEntryPhotos(entry.id)
-  const previousEntry = index > 0 ? visibleArchiveEntries[index - 1] : null
-  const average = previousEntry
-    ? getDieselAverageFromPrevious(entry, previousEntry)
-    : null
+                {visibleArchiveEntries.map((entry) => {
+                  const entryPhotos = getEntryPhotos(entry.id)
+                  const previousEntry = findPreviousEntryForSameTruck(entry)
+                  const average = getDieselAverageFromPrevious(
+                    entry,
+                    previousEntry
+                  )
 
                   return (
                     <button
@@ -1041,17 +1086,18 @@ const visibleArchiveEntries = activeArchiveWeek
                             </b>
                           </div>
 
-                   {isBoss && average !== null && (
-  <>
-    <div>
-      MPG: <b>{average.mpg.toFixed(1)}</b>
-    </div>
+                          {isBoss && average !== null && (
+                            <>
+                              <div>
+                                MPG: <b>{average.mpg.toFixed(1)}</b>
+                              </div>
 
-    <div>
-      L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
-    </div>
-  </>
-)}
+                              <div>
+                                L/100km:{" "}
+                                <b>{average.litresPer100km.toFixed(1)}</b>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         {entryPhotos.length > 0 && (
