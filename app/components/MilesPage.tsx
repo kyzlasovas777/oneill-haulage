@@ -16,7 +16,27 @@ type MileageEntry = {
   finish_mileage: number | null
   total_miles: number | null
   reg_number: string | null
+  avg_l100: number | null
+  estimated_litres: number | null
   created_at?: string
+}
+
+type Truck = {
+  id: number
+  reg: string
+}
+
+type DieselEntry = {
+  id: number
+  reg_number: string | null
+  mileage: number | null
+  litres: number | null
+  created_at?: string
+}
+
+type DieselStat = {
+  mpg: number
+  l100: number
 }
 
 function formatEntryDate(date: Date) {
@@ -68,25 +88,27 @@ function getWeekTitle(dateText: string) {
   return `${formatShort(monday)}-${formatShort(sunday)}`
 }
 
+function normaliseReg(reg: string | null | undefined) {
+  return (reg ?? "").trim().toUpperCase()
+}
+
 export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const [entries, setEntries] = useState<MileageEntry[]>([])
-const [trucks, setTrucks] = useState<any[]>([])
-const [assignedReg, setAssignedReg] = useState("")
+  const [trucks, setTrucks] = useState<Truck[]>([])
+  const [assignedReg, setAssignedReg] = useState("")
 
   const [startMileage, setStartMileage] = useState("")
   const [finishMileage, setFinishMileage] = useState("")
-  const [saving, setSaving] = useState(false)
   const [regNumber, setRegNumber] = useState("")
-
-
+  const [saving, setSaving] = useState(false)
 
   const [addOpen, setAddOpen] = useState(false)
 
   const [editingEntry, setEditingEntry] = useState<MileageEntry | null>(null)
   const [editStartMileage, setEditStartMileage] = useState("")
   const [editFinishMileage, setEditFinishMileage] = useState("")
+  const [editRegNumber, setEditRegNumber] = useState("")
   const [editingSaving, setEditingSaving] = useState(false)
-const [editRegNumber, setEditRegNumber] = useState("")
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
@@ -98,8 +120,6 @@ const [editRegNumber, setEditRegNumber] = useState("")
   const needsStart = !todayEntry
   const needsFinish = todayEntry && todayEntry.finish_mileage === null
   const todayCompleted = todayEntry && todayEntry.finish_mileage !== null
-
-
 
   const loadMileageEntries = async () => {
     const { data, error } = await supabase
@@ -118,30 +138,83 @@ const [editRegNumber, setEditRegNumber] = useState("")
   }
 
   const loadTrucks = async () => {
-  const { data } = await supabase
-    .from("trucks")
-    .select("*")
-    .order("reg")
-console.log("TRUCKS:", data)
-  setTrucks(data ?? [])
-  console.log("Loaded trucks:", data)
-}
+    const { data, error } = await supabase
+      .from("trucks")
+      .select("*")
+      .order("reg")
 
-const loadAssignedTruck = async () => {
-  const { data } = await supabase
-    .from("drivers")
-    .select("truck_reg")
-    .eq("id", driverId)
-    .single()
+    if (error) {
+      console.log("TRUCKS LOAD ERROR:", error)
+      return
+    }
 
-  setAssignedReg(data?.truck_reg ?? "")
-}
+    setTrucks(data ?? [])
+  }
 
-useEffect(() => {
-  loadMileageEntries()
-  loadTrucks()
-  loadAssignedTruck()
-}, [driverId])
+  const loadAssignedTruck = async () => {
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("truck_reg")
+      .eq("id", driverId)
+      .single()
+
+    if (error) {
+      console.log("ASSIGNED TRUCK LOAD ERROR:", error)
+      return
+    }
+
+    setAssignedReg(data?.truck_reg ?? "")
+  }
+
+  const getTruckDieselStat = async (reg: string): Promise<DieselStat | null> => {
+    const cleanReg = normaliseReg(reg)
+    if (!cleanReg) return null
+
+    const { data, error } = await supabase
+      .from("diesel_entries")
+      .select("id, reg_number, mileage, litres, created_at")
+      .not("reg_number", "is", null)
+      .not("mileage", "is", null)
+      .not("litres", "is", null)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.log("GET TRUCK DIESEL STAT ERROR:", error)
+      return null
+    }
+
+    const truckEntries: DieselEntry[] = (data ?? [])
+      .filter((entry) => normaliseReg(entry.reg_number) === cleanReg)
+      .sort(
+        (a, b) =>
+          new Date(b.created_at ?? "").getTime() -
+          new Date(a.created_at ?? "").getTime()
+      )
+
+    if (truckEntries.length < 2) return null
+
+    const current = truckEntries[0]
+    const previous = truckEntries[1]
+
+    if (!current.mileage || !previous.mileage || !current.litres) return null
+
+    const miles = current.mileage - previous.mileage
+    if (miles <= 0) return null
+
+    const ukGallons = current.litres / 4.54609
+    const mpg = miles / ukGallons
+
+    const km = miles * 1.60934
+    const l100 = (current.litres / km) * 100
+
+    return { mpg, l100 }
+  }
+
+  useEffect(() => {
+    loadMileageEntries()
+    loadTrucks()
+    loadAssignedTruck()
+  }, [driverId])
 
   const openEdit = (entry: MileageEntry) => {
     setEditingEntry(entry)
@@ -156,13 +229,19 @@ useEffect(() => {
     setEditingEntry(null)
     setEditStartMileage("")
     setEditFinishMileage("")
-  setEditRegNumber("")
+    setEditRegNumber("")
   }
 
   const openAdd = () => {
     setStartMileage("")
     setFinishMileage("")
-  setRegNumber(assignedReg)
+
+    if (needsFinish && todayEntry?.reg_number) {
+      setRegNumber(todayEntry.reg_number)
+    } else {
+      setRegNumber(assignedReg)
+    }
+
     setAddOpen(true)
   }
 
@@ -177,6 +256,7 @@ useEffect(() => {
     if (saving) return
 
     const start = Number(startMileage)
+    const mileageReg = normaliseReg(regNumber || assignedReg)
 
     if (!startMileage) {
       alert("Enter start mileage")
@@ -198,7 +278,9 @@ useEffect(() => {
         start_mileage: start,
         finish_mileage: null,
         total_miles: null,
-        reg_number: regNumber || null,
+        reg_number: mileageReg || null,
+        avg_l100: null,
+        estimated_litres: null,
       })
       .select()
       .single()
@@ -220,6 +302,7 @@ useEffect(() => {
     if (saving || !todayEntry) return
 
     const finish = Number(finishMileage)
+    const mileageReg = normaliseReg(regNumber || todayEntry.reg_number || assignedReg)
 
     if (!finishMileage) {
       alert("Enter finish mileage")
@@ -233,6 +316,14 @@ useEffect(() => {
 
     const total = finish - todayEntry.start_mileage
 
+    const stat = await getTruckDieselStat(mileageReg)
+    const avgL100 = stat?.l100 ?? null
+
+    const estimatedLitres =
+      avgL100 !== null && total > 0
+        ? Number(((total * 1.60934 * avgL100) / 100).toFixed(1))
+        : null
+
     setSaving(true)
 
     const { data, error } = await supabase
@@ -240,7 +331,9 @@ useEffect(() => {
       .update({
         finish_mileage: finish,
         total_miles: total,
-        reg_number: regNumber || todayEntry.reg_number || null,
+        reg_number: mileageReg || null,
+        avg_l100: avgL100,
+        estimated_litres: estimatedLitres,
       })
       .eq("id", todayEntry.id)
       .select()
@@ -271,10 +364,7 @@ useEffect(() => {
 
     if (needsFinish) {
       await saveFinishMileage()
-      return
     }
-
-   
   }
 
   const saveEditMileage = async () => {
@@ -283,6 +373,7 @@ useEffect(() => {
     const start = Number(editStartMileage)
     const finish =
       editFinishMileage.trim() === "" ? null : Number(editFinishMileage)
+    const mileageReg = normaliseReg(editRegNumber || editingEntry.reg_number || assignedReg)
 
     if (!editStartMileage) {
       alert("Enter start mileage")
@@ -301,6 +392,19 @@ useEffect(() => {
 
     const total = finish === null ? null : finish - start
 
+    let avgL100: number | null = null
+    let estimatedLitres: number | null = null
+
+    if (finish !== null && total !== null && total > 0) {
+      const stat = await getTruckDieselStat(mileageReg)
+      avgL100 = stat?.l100 ?? null
+
+      estimatedLitres =
+        avgL100 !== null
+          ? Number(((total * 1.60934 * avgL100) / 100).toFixed(1))
+          : null
+    }
+
     setEditingSaving(true)
 
     const { data, error } = await supabase
@@ -309,7 +413,9 @@ useEffect(() => {
         start_mileage: start,
         finish_mileage: finish,
         total_miles: total,
-        reg_number: editRegNumber || null,
+        reg_number: mileageReg || null,
+        avg_l100: avgL100,
+        estimated_litres: estimatedLitres,
       })
       .eq("id", editingEntry.id)
       .select()
@@ -349,9 +455,9 @@ useEffect(() => {
     closeEdit()
   }
 
- const currentWeekEntries = entries
-  .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
-  .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+  const currentWeekEntries = entries
+    .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
 
   const weekTotal = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.total_miles ?? 0),
@@ -369,11 +475,25 @@ useEffect(() => {
 
   const archiveTitles = Object.keys(archiveWeeks)
 
-const visibleArchiveEntries = activeArchiveWeek
-  ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
-      a.entry_date.localeCompare(b.entry_date)
+  const visibleArchiveEntries = activeArchiveWeek
+    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
+        a.entry_date.localeCompare(b.entry_date)
+      )
+    : []
+
+  const renderFuel = (entry: MileageEntry) => {
+    const fuel = Number(entry.estimated_litres)
+
+    if (!entry.estimated_litres || !Number.isFinite(fuel) || fuel <= 0) {
+      return null
+    }
+
+    return (
+      <div className="text-[12px] text-zinc-500">
+        Fuel: ~<b>{fuel.toFixed(1)}</b> L
+      </div>
     )
-  : []
+  }
 
   return (
     <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
@@ -385,15 +505,15 @@ const visibleArchiveEntries = activeArchiveWeek
           Back
         </button>
 
-       <div className="flex-1 text-center">
-  <div className="text-[22px] font-bold">Miles</div>
+        <div className="flex-1 text-center">
+          <div className="text-[22px] font-bold">Miles</div>
 
-  <div className="text-[14px]">
-    <span className="text-zinc-500">This week</span>{" "}
-    <b>{weekTotal}</b>{" "}
-    <span className="text-zinc-500">miles</span>
-  </div>
-</div>
+          <div className="text-[14px]">
+            <span className="text-zinc-500">This week</span>{" "}
+            <b>{weekTotal}</b>{" "}
+            <span className="text-zinc-500">miles</span>
+          </div>
+        </div>
 
         <button
           onClick={() => {
@@ -406,8 +526,6 @@ const visibleArchiveEntries = activeArchiveWeek
         </button>
       </div>
 
-   
-
       <div className="mt-5 space-y-3">
         {currentWeekEntries.map((entry) => (
           <button
@@ -415,29 +533,34 @@ const visibleArchiveEntries = activeArchiveWeek
             onClick={() => openEdit(entry)}
             className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
           >
-<div>
-<div className="relative text-center mb-1">
- <div>{displayDate(entry.entry_date)}</div>
+            <div>
+              <div className="relative text-center mb-1">
+                <div>{displayDate(entry.entry_date)}</div>
 
-<div className="absolute right-0 top-0 font-semibold">
-  {entry.reg_number ?? assignedReg}
-</div>
-</div>
+                <div className="absolute right-0 top-0 font-semibold">
+                  {entry.reg_number ?? assignedReg}
+                </div>
+              </div>
 
-  <div className="flex items-center justify-between">
-<div>
-  <span className="text-zinc-500">Start:</span>{" "}
-  <b>{entry.start_mileage}</b>
-  {" - "}
-  <span className="text-zinc-500">Finish:</span>{" "}
-  <b>{entry.finish_mileage ?? "-"}</b>
-</div>
-<div className="text-right">
-  <span className="text-zinc-500">Total:</span>{" "}
-  <b>{entry.total_miles ?? "-"}</b> miles
-</div>
-  </div>
-</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-zinc-500">Start:</span>{" "}
+                  <b>{entry.start_mileage}</b>
+                  {" - "}
+                  <span className="text-zinc-500">Finish:</span>{" "}
+                  <b>{entry.finish_mileage ?? "-"}</b>
+                </div>
+
+                <div className="text-right">
+                  <div>
+                    <span className="text-zinc-500">Total:</span>{" "}
+                    <b>{entry.total_miles ?? "--"}</b> miles
+                  </div>
+
+                  {renderFuel(entry)}
+                </div>
+              </div>
+            </div>
           </button>
         ))}
       </div>
@@ -460,51 +583,50 @@ const visibleArchiveEntries = activeArchiveWeek
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
           >
-        <h2 className="text-[22px] font-bold mb-3">Add Mileage</h2>
+            <h2 className="text-[22px] font-bold mb-3">Add Mileage</h2>
 
             <div className="space-y-3">
-             {needsStart && (
-  <>
-<select
-  value={regNumber}
-  onChange={(e) => setRegNumber(e.target.value)}
-  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
->
-  <option value="">Select Reg</option>
+              {needsStart && (
+                <>
+                  <select
+                    value={regNumber}
+                    onChange={(e) => setRegNumber(e.target.value)}
+                    className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+                  >
+                    <option value="">Select Reg</option>
 
-  {trucks.map((truck) => (
-    <option key={truck.id} value={truck.reg}>
-      {truck.reg}
-    </option>
-  ))}
-</select>
+                    {trucks.map((truck) => (
+                      <option key={truck.id} value={truck.reg}>
+                        {truck.reg}
+                      </option>
+                    ))}
+                  </select>
 
-    <input
-      type="number"
-      placeholder="Start mileage"
-      value={startMileage}
-      onChange={(e) => setStartMileage(e.target.value)}
-      className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
-    />
-  </>
-)}
+                  <input
+                    type="number"
+                    placeholder="Start mileage"
+                    value={startMileage}
+                    onChange={(e) => setStartMileage(e.target.value)}
+                    className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+                  />
+                </>
+              )}
 
               {needsFinish && todayEntry && (
                 <>
+                  <select
+                    value={regNumber}
+                    onChange={(e) => setRegNumber(e.target.value)}
+                    className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+                  >
+                    <option value="">Select Reg</option>
 
-<select
-  value={regNumber}
-  onChange={(e) => setRegNumber(e.target.value)}
-  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
->
-  <option value="">Select Reg</option>
-
-  {trucks.map((truck) => (
-    <option key={truck.id} value={truck.reg}>
-      {truck.reg}
-    </option>
-  ))}
-</select>
+                    {trucks.map((truck) => (
+                      <option key={truck.id} value={truck.reg}>
+                        {truck.reg}
+                      </option>
+                    ))}
+                  </select>
 
                   <div className="text-[15px] font-bold">
                     Start: {todayEntry.start_mileage}
@@ -519,8 +641,6 @@ const visibleArchiveEntries = activeArchiveWeek
                   />
                 </>
               )}
-
-      
 
               <div className="flex gap-2 pt-1">
                 <button
@@ -562,20 +682,19 @@ const visibleArchiveEntries = activeArchiveWeek
             </div>
 
             <div className="space-y-3">
+              <select
+                value={editRegNumber}
+                onChange={(e) => setEditRegNumber(e.target.value)}
+                className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+              >
+                <option value="">Select Reg</option>
 
-<select
-  value={editRegNumber}
-  onChange={(e) => setEditRegNumber(e.target.value)}
-  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
->
-  <option value="">Select Reg</option>
-
-  {trucks.map((truck) => (
-    <option key={truck.id} value={truck.reg}>
-      {truck.reg}
-    </option>
-  ))}
-</select>
+                {trucks.map((truck) => (
+                  <option key={truck.id} value={truck.reg}>
+                    {truck.reg}
+                  </option>
+                ))}
+              </select>
 
               <input
                 type="number"
@@ -626,32 +745,32 @@ const visibleArchiveEntries = activeArchiveWeek
       {archiveOpen && (
         <div
           onClick={() => setArchiveOpen(false)}
-      className="fixed inset-0 z-[105] bg-[#efeff4]"
+          className="fixed inset-0 z-[105] bg-[#efeff4]"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-      className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
+            className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
           >
-         <div className="flex items-center justify-between mb-4">
-  <button
-    onClick={() => {
-      if (activeArchiveWeek) {
-        setActiveArchiveWeek(null)
-      } else {
-        setArchiveOpen(false)
-      }
-    }}
-    className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
-  >
-    Back
-  </button>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => {
+                  if (activeArchiveWeek) {
+                    setActiveArchiveWeek(null)
+                  } else {
+                    setArchiveOpen(false)
+                  }
+                }}
+                className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
+              >
+                Back
+              </button>
 
-  <h2 className="text-[22px] font-bold">
-    {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
-  </h2>
+              <h2 className="text-[22px] font-bold">
+                {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
+              </h2>
 
-  <div className="w-[70px]" />
-</div>
+              <div className="w-[70px]" />
+            </div>
 
             {!activeArchiveWeek && (
               <div className="space-y-2">
@@ -699,24 +818,24 @@ const visibleArchiveEntries = activeArchiveWeek
                     }}
                     className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
                   >
-<div>
-  <div>{displayDate(entry.entry_date)}</div>
+                    <div>
+                      <div>{displayDate(entry.entry_date)}</div>
 
-  <div className="text-center">
-    Start: <b>{entry.start_mileage}</b> - Finish:{" "}
-    <b>{entry.finish_mileage ?? "-"}</b>
-  </div>
+                      <div className="text-center">
+                        Start: <b>{entry.start_mileage}</b> - Finish:{" "}
+                        <b>{entry.finish_mileage ?? "-"}</b>
+                      </div>
 
-  <div className="text-right font-bold">
-    Total: {entry.total_miles ?? "-"} miles
-  </div>
-</div>
+                      <div className="text-right font-bold">
+                        Total: {entry.total_miles ?? "-"} miles
+                      </div>
+
+                      <div className="text-right">{renderFuel(entry)}</div>
+                    </div>
                   </button>
                 ))}
               </div>
             )}
-
-         
           </div>
         </div>
       )}
