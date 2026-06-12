@@ -277,11 +277,12 @@ export default function DieselPage({
     const mpg = miles / ukGallons
 
     const km = miles * 1.60934
-    const l100 = (current.litres / km) * 100
+    const litresPer100km = (current.litres / km) * 100
 
     return {
       mpg,
-      litresPer100km: l100,
+      litresPer100km,
+      miles,
     }
   }
 
@@ -686,17 +687,22 @@ export default function DieselPage({
                     </b>
                   </div>
 
-                  {isBoss && average !== null && (
-                    <>
-                      <div>
-                        MPG: <b>{average.mpg.toFixed(1)}</b>
-                      </div>
+               {isBoss && average !== null && (
+  <>
+    <div>
+      Distance: <b>{average.miles}</b> miles
+    </div>
 
-                      <div>
-                        L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
-                      </div>
-                    </>
-                  )}
+    <div>
+      MPG: <b>{average.mpg.toFixed(1)}</b>
+    </div>
+
+    <div>
+      L/100km:{" "}
+      <b>{average.litresPer100km.toFixed(1)}</b>
+    </div>
+  </>
+)}
                 </div>
 
                 {entryPhotos.length > 0 && (
@@ -1086,18 +1092,22 @@ export default function DieselPage({
                             </b>
                           </div>
 
-                          {isBoss && average !== null && (
-                            <>
-                              <div>
-                                MPG: <b>{average.mpg.toFixed(1)}</b>
-                              </div>
+                    {isBoss && average !== null && (
+  <>
+    <div>
+      Distance: <b>{average.miles}</b> miles
+    </div>
 
-                              <div>
-                                L/100km:{" "}
-                                <b>{average.litresPer100km.toFixed(1)}</b>
-                              </div>
-                            </>
-                          )}
+    <div>
+      MPG: <b>{average.mpg.toFixed(1)}</b>
+    </div>
+
+    <div>
+      L/100km:{" "}
+      <b>{average.litresPer100km.toFixed(1)}</b>
+    </div>
+  </>
+)}
                         </div>
 
                         {entryPhotos.length > 0 && (
