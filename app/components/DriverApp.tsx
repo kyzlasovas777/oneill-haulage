@@ -1594,7 +1594,6 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   src={selectedPhoto}
   alt="Full screen"
   className="max-w-full max-h-full object-contain"
-  onClick={(e) => e.stopPropagation()}
 />
   </div>
 )}
