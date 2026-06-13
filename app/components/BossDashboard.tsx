@@ -462,35 +462,41 @@ setShowAddDriver(false)
           isActive ? "bg-white" : "bg-zinc-200 opacity-70"
         }`}
       >
-      <div className="flex justify-between items-center">
-          <p className="text-[18px] font-bold text-black leading-tight">
-            {isActive ? "🟢 " : "⚫ "}
-            {driver.name}
-            {driver.syncStatus === "pending" ? " ⏳" : ""}
-          </p>
-
-<div className="text-right mt-[14px]">
-  <p className="text-[15px] font-extrabold text-black">
-    {driver.truckReg}
-  </p>
-
-{driver.truckReg && dieselStats[driver.truckReg] && (
-  <>
-    <p className="text-[12px] text-zinc-500">
-      {dieselStats[driver.truckReg].mpg.toFixed(1)} MPG • {dieselStats[driver.truckReg].l100.toFixed(1)} L/100km
+ <div className="grid grid-cols-2 gap-4 mb-4">
+  <div className="space-y-1">
+    <p className="h-[22px] text-[18px] font-bold text-black leading-tight">
+      {isActive ? "🟢 " : "⚫ "}
+      {driver.name}
+      {driver.syncStatus === "pending" ? " ⏳" : ""}
     </p>
-  </>
-)}
+
+    <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
+      PIN: {driver.pin}
+    </p>
+
+    <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
+      This week rows: {getDriverRows(driver.id)}
+    </p>
+  </div>
+
+  <div className="space-y-1 text-right">
+    <p className="h-[22px] text-[15px] font-extrabold text-black leading-tight">
+      {driver.truckReg || ""}
+    </p>
+
+    <p className="h-[18px] text-[13px] text-zinc-500 leading-tight">
+      {driver.truckReg && dieselStats[driver.truckReg]
+        ? `${dieselStats[driver.truckReg].mpg.toFixed(1)} MPG`
+        : ""}
+    </p>
+
+    <p className="h-[18px] text-[13px] text-zinc-500 leading-tight">
+      {driver.truckReg && dieselStats[driver.truckReg]
+        ? `${dieselStats[driver.truckReg].l100.toFixed(1)} L/100km`
+        : ""}
+    </p>
+  </div>
 </div>
-        </div>
-
-        <p className="text-[13px] text-zinc-400 leading-tight">
-          PIN: {driver.pin}
-        </p>
-
-        <p className="text-[13px] text-zinc-400 mb-2 leading-tight">
-          This week rows: {getDriverRows(driver.id)}
-        </p>
 
         <div className="flex gap-2">
           <button
