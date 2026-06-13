@@ -9,6 +9,8 @@ type DieselPageProps = {
   isBoss?: boolean
 }
 
+type SyncStatus = "synced" | "pending" | "edit_pending" | "delete_pending"
+
 type DieselEntry = {
   id: number
   driver_id: number
@@ -19,6 +21,7 @@ type DieselEntry = {
   photo_url?: string | null
   photo_path?: string | null
   created_at?: string
+  syncStatus?: SyncStatus
 }
 
 type DieselPhoto = {
@@ -28,6 +31,7 @@ type DieselPhoto = {
   photo_url: string
   photo_path: string
   created_at?: string
+  syncStatus?: SyncStatus
 }
 
 function formatEntryDate(date: Date) {
@@ -141,6 +145,28 @@ async function compressImage(file: File): Promise<File> {
   })
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function base64ToFile(base64: string, fileName: string) {
+  const parts = base64.split(",")
+  const mime = parts[0].match(/:(.*?);/)?.[1] ?? "image/jpeg"
+  const binary = atob(parts[1])
+  const array = new Uint8Array(binary.length)
+
+  for (let i = 0; i < binary.length; i++) {
+    array[i] = binary.charCodeAt(i)
+  }
+
+  return new File([array], fileName, { type: mime })
+}
+
 export default function DieselPage({
   driverId,
   onBack,
@@ -177,14 +203,368 @@ export default function DieselPage({
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
 
+  const entriesRef = useRef<DieselEntry[]>([])
+  const photosRef = useRef<DieselPhoto[]>([])
+  const syncingRef = useRef(false)
+  const loadedRef = useRef(false)
+
   const today = formatEntryDate(new Date())
   const currentWeekTitle = getWeekTitle(today)
 
+  const storageKey = `oneill-diesel-offline-${driverId}`
+
+  const updateEntries = (next: DieselEntry[]) => {
+    entriesRef.current = next
+    setEntries(next)
+  }
+
+  const updatePhotos = (next: DieselPhoto[]) => {
+    photosRef.current = next
+    setPhotos(next)
+  }
+
+  const saveLocal = (nextEntries = entriesRef.current, nextPhotos = photosRef.current) => {
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          entries: nextEntries,
+          photos: nextPhotos,
+        })
+      )
+    } catch (error) {
+      console.log("DIESEL LOCAL SAVE ERROR:", error)
+    }
+  }
+
   const getEntryPhotos = (entryId: number) => {
-    return photos.filter((photo) => photo.diesel_entry_id === entryId)
+    return photos.filter(
+      (photo) =>
+        photo.diesel_entry_id === entryId &&
+        photo.syncStatus !== "delete_pending"
+    )
+  }
+
+  const uploadPhoto = async (file: File) => {
+    const compressedFile = await compressImage(file)
+
+    const cleanName = compressedFile.name.replaceAll(" ", "-")
+    const filePath = `diesel/${driverId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}-${cleanName}`
+
+    const { error } = await supabase.storage
+      .from("entry-photos")
+      .upload(filePath, compressedFile)
+
+    if (error) {
+      console.log("DIESEL PHOTO UPLOAD ERROR:", error)
+      throw error
+    }
+
+    const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
+
+    return {
+      photo_url: data.publicUrl,
+      photo_path: filePath,
+    }
+  }
+
+  const uploadPendingPhotosForEntry = async (
+    realEntryId: number,
+    pendingPhotos: DieselPhoto[]
+  ) => {
+    if (pendingPhotos.length === 0) return []
+
+    const rows = []
+
+    for (const photo of pendingPhotos) {
+      const file = base64ToFile(photo.photo_url, `diesel-${photo.id}.jpg`)
+      const uploaded = await uploadPhoto(file)
+
+      rows.push({
+        diesel_entry_id: realEntryId,
+        driver_id: driverId,
+        photo_url: uploaded.photo_url,
+        photo_path: uploaded.photo_path,
+      })
+    }
+
+    const { data, error } = await supabase
+      .from("diesel_photos")
+      .insert(rows)
+      .select()
+
+    if (error) {
+      console.log("DIESEL PENDING PHOTOS INSERT ERROR:", error)
+      throw error
+    }
+
+    return (data ?? []).map((photo) => ({
+      ...photo,
+      syncStatus: "synced" as SyncStatus,
+    }))
+  }
+
+  const syncPendingDiesel = async () => {
+    if (!navigator.onLine) return
+    if (syncingRef.current) return
+
+    syncingRef.current = true
+
+    try {
+      let nextEntries = [...entriesRef.current]
+      let nextPhotos = [...photosRef.current]
+
+      const deleteEntries = nextEntries.filter(
+        (entry) => entry.syncStatus === "delete_pending"
+      )
+
+      for (const entry of deleteEntries) {
+        if (entry.id > 0) {
+          const entryPhotos = nextPhotos.filter(
+            (photo) => photo.diesel_entry_id === entry.id
+          )
+
+          const storagePaths = entryPhotos
+            .map((photo) => photo.photo_path)
+            .filter(Boolean)
+
+          if (storagePaths.length > 0) {
+            await supabase.storage.from("entry-photos").remove(storagePaths)
+          }
+
+          await supabase
+            .from("diesel_photos")
+            .delete()
+            .eq("diesel_entry_id", entry.id)
+
+          await supabase.from("diesel_entries").delete().eq("id", entry.id)
+        }
+
+        nextEntries = nextEntries.filter((item) => item.id !== entry.id)
+        nextPhotos = nextPhotos.filter(
+          (photo) => photo.diesel_entry_id !== entry.id
+        )
+
+        updateEntries(nextEntries)
+        updatePhotos(nextPhotos)
+        saveLocal(nextEntries, nextPhotos)
+      }
+
+      const deletePhotos = nextPhotos.filter(
+        (photo) => photo.syncStatus === "delete_pending"
+      )
+
+      for (const photo of deletePhotos) {
+        if (photo.id > 0) {
+          if (photo.photo_path) {
+            await supabase.storage.from("entry-photos").remove([photo.photo_path])
+          }
+
+          await supabase.from("diesel_photos").delete().eq("id", photo.id)
+        }
+
+        nextPhotos = nextPhotos.filter((item) => item.id !== photo.id)
+        updatePhotos(nextPhotos)
+        saveLocal(nextEntries, nextPhotos)
+      }
+
+      const pendingEntries = nextEntries.filter(
+        (entry) => entry.syncStatus === "pending"
+      )
+
+      for (const entry of pendingEntries) {
+        const { data, error } = await supabase
+          .from("diesel_entries")
+          .insert({
+            driver_id: entry.driver_id,
+            entry_date: entry.entry_date,
+            mileage: entry.mileage,
+            litres: entry.litres,
+            reg_number: entry.reg_number,
+            photo_url: null,
+            photo_path: null,
+          })
+          .select()
+          .single()
+
+        if (error || !data) {
+          console.log("DIESEL PENDING ENTRY SYNC ERROR:", error)
+          continue
+        }
+
+        const oldId = entry.id
+        const syncedEntry: DieselEntry = {
+          ...data,
+          syncStatus: "synced",
+        }
+
+        nextEntries = nextEntries.map((item) =>
+          item.id === oldId ? syncedEntry : item
+        )
+
+        nextPhotos = nextPhotos.map((photo) =>
+          photo.diesel_entry_id === oldId
+            ? { ...photo, diesel_entry_id: data.id }
+            : photo
+        )
+
+        updateEntries(nextEntries)
+        updatePhotos(nextPhotos)
+        saveLocal(nextEntries, nextPhotos)
+
+        const pendingPhotos = nextPhotos.filter(
+          (photo) =>
+            photo.diesel_entry_id === data.id &&
+            photo.syncStatus === "pending"
+        )
+
+        try {
+          const uploadedPhotos = await uploadPendingPhotosForEntry(
+            data.id,
+            pendingPhotos
+          )
+
+          nextPhotos = [
+            ...uploadedPhotos,
+            ...nextPhotos.filter(
+              (photo) =>
+                !pendingPhotos.some((pending) => pending.id === photo.id)
+            ),
+          ]
+
+          updatePhotos(nextPhotos)
+          saveLocal(nextEntries, nextPhotos)
+        } catch (error) {
+          console.log("DIESEL PENDING ENTRY PHOTO SYNC ERROR:", error)
+        }
+      }
+
+      const editEntries = nextEntries.filter(
+        (entry) => entry.syncStatus === "edit_pending" && entry.id > 0
+      )
+
+      for (const entry of editEntries) {
+        const { data, error } = await supabase
+          .from("diesel_entries")
+          .update({
+            mileage: entry.mileage,
+            litres: entry.litres,
+            reg_number: entry.reg_number,
+          })
+          .eq("id", entry.id)
+          .select()
+          .single()
+
+        if (error || !data) {
+          console.log("DIESEL EDIT SYNC ERROR:", error)
+          continue
+        }
+
+        const syncedEntry: DieselEntry = {
+          ...data,
+          syncStatus: "synced",
+        }
+
+        nextEntries = nextEntries.map((item) =>
+          item.id === entry.id ? syncedEntry : item
+        )
+
+        updateEntries(nextEntries)
+        saveLocal(nextEntries, nextPhotos)
+      }
+
+      const pendingPhotos = nextPhotos.filter(
+        (photo) => photo.syncStatus === "pending" && photo.diesel_entry_id > 0
+      )
+
+      for (const photo of pendingPhotos) {
+        try {
+          const uploadedPhotos = await uploadPendingPhotosForEntry(
+            photo.diesel_entry_id,
+            [photo]
+          )
+
+          nextPhotos = [
+            ...uploadedPhotos,
+            ...nextPhotos.filter((item) => item.id !== photo.id),
+          ]
+
+          updatePhotos(nextPhotos)
+          saveLocal(nextEntries, nextPhotos)
+        } catch (error) {
+          console.log("DIESEL SINGLE PHOTO SYNC ERROR:", error)
+        }
+      }
+    } finally {
+      syncingRef.current = false
+    }
+  }
+
+  const mergeRemoteData = (
+    remoteAllEntries: DieselEntry[],
+    remotePhotos: DieselPhoto[]
+  ) => {
+    const localEntries = entriesRef.current
+    const localPhotos = photosRef.current
+
+    const localSpecialEntries = localEntries.filter(
+      (entry) => entry.syncStatus && entry.syncStatus !== "synced"
+    )
+
+    const blockedEntryIds = new Set(
+      localSpecialEntries
+        .filter((entry) => entry.id > 0)
+        .map((entry) => entry.id)
+    )
+
+    const remoteDriverEntries = remoteAllEntries
+      .filter((entry) => entry.driver_id === driverId)
+      .filter((entry) => !blockedEntryIds.has(entry.id))
+      .map((entry) => ({
+        ...entry,
+        syncStatus: "synced" as SyncStatus,
+      }))
+
+    const nextEntries = [...localSpecialEntries, ...remoteDriverEntries]
+
+    const localSpecialPhotos = localPhotos.filter(
+      (photo) => photo.syncStatus && photo.syncStatus !== "synced"
+    )
+
+    const blockedPhotoIds = new Set(
+      localSpecialPhotos.filter((photo) => photo.id > 0).map((photo) => photo.id)
+    )
+
+    const nextPhotos = [
+      ...localSpecialPhotos,
+      ...remotePhotos
+        .filter((photo) => !blockedPhotoIds.has(photo.id))
+        .map((photo) => ({
+          ...photo,
+          syncStatus: "synced" as SyncStatus,
+        })),
+    ]
+
+    updateEntries(nextEntries)
+    updatePhotos(nextPhotos)
+
+    const allWithLocal = [
+      ...remoteAllEntries.map((entry) => ({
+        ...entry,
+        syncStatus: "synced" as SyncStatus,
+      })),
+      ...localSpecialEntries.filter((entry) => entry.syncStatus !== "delete_pending"),
+    ]
+
+    setAllDieselEntries(allWithLocal)
+    saveLocal(nextEntries, nextPhotos)
   }
 
   const loadDieselEntries = async () => {
+    if (!navigator.onLine) return
+
     const { data, error } = await supabase
       .from("diesel_entries")
       .select("*")
@@ -194,10 +574,6 @@ export default function DieselPage({
       console.log("DIESEL LOAD ERROR:", error)
       return
     }
-
-    const allRows = data ?? []
-    setAllDieselEntries(allRows)
-    setEntries(allRows.filter((entry) => entry.driver_id === driverId))
 
     const { data: photoData, error: photoError } = await supabase
       .from("diesel_photos")
@@ -210,15 +586,18 @@ export default function DieselPage({
       return
     }
 
-    setPhotos(photoData ?? [])
+    mergeRemoteData(data ?? [], photoData ?? [])
   }
 
   const loadTrucks = async () => {
+    if (!navigator.onLine) return
     const { data } = await supabase.from("trucks").select("*").order("reg")
     setTrucks(data ?? [])
   }
 
   const loadAssignedTruck = async () => {
+    if (!navigator.onLine) return
+
     const { data } = await supabase
       .from("drivers")
       .select("truck_reg")
@@ -229,10 +608,60 @@ export default function DieselPage({
   }
 
   useEffect(() => {
+    loadedRef.current = false
+
+    try {
+      const saved = localStorage.getItem(storageKey)
+
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        const savedEntries = parsed.entries ?? []
+        const savedPhotos = parsed.photos ?? []
+
+        entriesRef.current = savedEntries
+        photosRef.current = savedPhotos
+        setEntries(savedEntries)
+        setPhotos(savedPhotos)
+        setAllDieselEntries(savedEntries)
+      }
+    } catch (error) {
+      console.log("DIESEL LOCAL LOAD ERROR:", error)
+    }
+
+    loadedRef.current = true
+
     loadDieselEntries()
     loadTrucks()
     loadAssignedTruck()
+
+    const handleOnline = () => {
+      syncPendingDiesel()
+      loadDieselEntries()
+      loadTrucks()
+      loadAssignedTruck()
+    }
+
+    window.addEventListener("online", handleOnline)
+
+    if (navigator.onLine) {
+      setTimeout(() => {
+        syncPendingDiesel()
+      }, 500)
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+    }
   }, [driverId])
+
+  useEffect(() => {
+    entriesRef.current = entries
+    photosRef.current = photos
+
+    if (loadedRef.current) {
+      saveLocal(entries, photos)
+    }
+  }, [entries, photos])
 
   const findPreviousEntryForSameTruck = (current: DieselEntry) => {
     const currentReg = normalizeReg(current.reg_number)
@@ -250,6 +679,7 @@ export default function DieselPage({
 
           return (
             entry.id !== current.id &&
+            entry.syncStatus !== "delete_pending" &&
             sameTruck &&
             isOlder &&
             entry.mileage !== null
@@ -321,7 +751,7 @@ export default function DieselPage({
     setEditPhotoFiles((prev) => prev.filter((_, i) => i !== index))
     setEditPhotoPreviews((prev) => prev.filter((_, i) => i !== index))
 
-    if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
+  if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
   const clearPhotos = () => {
@@ -340,60 +770,6 @@ export default function DieselPage({
     if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
-  const uploadPhoto = async (file: File) => {
-    const compressedFile = await compressImage(file)
-
-    const cleanName = compressedFile.name.replaceAll(" ", "-")
-    const filePath = `diesel/${driverId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}-${cleanName}`
-
-    const { error } = await supabase.storage
-      .from("entry-photos")
-      .upload(filePath, compressedFile)
-
-    if (error) {
-      console.log("DIESEL PHOTO UPLOAD ERROR:", error)
-      throw error
-    }
-
-    const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
-
-    return {
-      photo_url: data.publicUrl,
-      photo_path: filePath,
-    }
-  }
-
-  const uploadAndInsertPhotos = async (dieselEntryId: number, files: File[]) => {
-    if (files.length === 0) return
-
-    const rows = []
-
-    for (const file of files) {
-      const uploaded = await uploadPhoto(file)
-
-      rows.push({
-        diesel_entry_id: dieselEntryId,
-        driver_id: driverId,
-        photo_url: uploaded.photo_url,
-        photo_path: uploaded.photo_path,
-      })
-    }
-
-    const { data, error } = await supabase
-      .from("diesel_photos")
-      .insert(rows)
-      .select()
-
-    if (error) {
-      console.log("DIESEL PHOTOS INSERT ERROR:", error)
-      throw error
-    }
-
-    if (data) setPhotos((prev) => [...data, ...prev])
-  }
-
   const openEdit = (entry: DieselEntry) => {
     setEditingEntry(entry)
     setEditMileage(entry.mileage === null ? "" : String(entry.mileage))
@@ -409,228 +785,226 @@ export default function DieselPage({
     setEditRegNumber("")
     clearEditPhotos()
   }
-const saveDiesel = async () => {
-  if (saving) return
 
-  if (!mileage && !litres && photoFiles.length === 0) {
-    alert("Enter mileage, litres or add photo")
-    return
-  }
+  const saveDiesel = async () => {
+    if (saving) return
 
-  const mileageNumber = mileage ? Number(mileage) : null
-  const litresNumber = litres ? Number(litres) : null
-  const selectedReg = regNumber || assignedReg || null
-
-  if (mileageNumber !== null && mileageNumber <= 0) {
-    alert("Mileage must be higher than 0")
-    return
-  }
-
-  if (litresNumber !== null && litresNumber <= 0) {
-    alert("Litres must be higher than 0")
-    return
-  }
-
-  const localEntry = {
-    id: Date.now(),
-    driver_id: driverId,
-    entry_date: today,
-    mileage: mileageNumber,
-    litres: litresNumber,
-    reg_number: selectedReg,
-    photo_url: null,
-    photo_path: null,
-  }
-
-  setEntries((prev) => [localEntry, ...prev])
-  setAllDieselEntries((prev) => [localEntry, ...prev])
-
-  const filesToUpload = [...photoFiles]
-
-  setMileage("")
-  setLitres("")
-  setRegNumber("")
-  clearPhotos()
-  setAddOpen(false)
-  setSaving(false)
-
-  if (!navigator.onLine) {
-    return
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("diesel_entries")
-      .insert({
-        driver_id: driverId,
-        entry_date: today,
-        mileage: mileageNumber,
-        litres: litresNumber,
-        reg_number: selectedReg,
-        photo_url: null,
-        photo_path: null,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.log("DIESEL SAVE ERROR:", error)
+    if (!mileage && !litres && photoFiles.length === 0) {
+      alert("Enter mileage, litres or add photo")
       return
     }
 
-    if (data) {
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === localEntry.id ? data : entry))
-      )
+    const mileageNumber = mileage ? Number(mileage) : null
+    const litresNumber = litres ? Number(litres) : null
+    const selectedReg = regNumber || assignedReg || null
 
-      setAllDieselEntries((prev) =>
-        prev.map((entry) => (entry.id === localEntry.id ? data : entry))
-      )
-
-      await uploadAndInsertPhotos(data.id, filesToUpload)
+    if (mileageNumber !== null && mileageNumber <= 0) {
+      alert("Mileage must be higher than 0")
+      return
     }
-  } catch (error) {
-    console.log("DIESEL SAVE PHOTO ERROR:", error)
+
+    if (litresNumber !== null && litresNumber <= 0) {
+      alert("Litres must be higher than 0")
+      return
+    }
+
+    setSaving(true)
+
+    const localId = -Date.now()
+    const now = new Date().toISOString()
+
+    const compressedFiles = await Promise.all(
+      photoFiles.map((file) => compressImage(file))
+    )
+
+    const localPhotos: DieselPhoto[] = await Promise.all(
+      compressedFiles.map(async (file, index) => ({
+        id: localId - index - 1,
+        diesel_entry_id: localId,
+        driver_id: driverId,
+        photo_url: await fileToBase64(file),
+        photo_path: "",
+        created_at: now,
+        syncStatus: "pending" as SyncStatus,
+      }))
+    )
+
+    const localEntry: DieselEntry = {
+      id: localId,
+      driver_id: driverId,
+      entry_date: today,
+      mileage: mileageNumber,
+      litres: litresNumber,
+      reg_number: selectedReg,
+      photo_url: null,
+      photo_path: null,
+      created_at: now,
+      syncStatus: "pending",
+    }
+
+    const nextEntries = [localEntry, ...entriesRef.current]
+    const nextPhotos = [...localPhotos, ...photosRef.current]
+
+    updateEntries(nextEntries)
+    updatePhotos(nextPhotos)
+    setAllDieselEntries([localEntry, ...allDieselEntries])
+    saveLocal(nextEntries, nextPhotos)
+
+    setMileage("")
+    setLitres("")
+    setRegNumber("")
+    clearPhotos()
+    setAddOpen(false)
+    setSaving(false)
+
+    setTimeout(() => {
+      syncPendingDiesel()
+    }, 200)
   }
-}
-const saveEditDiesel = async () => {
-  if (editingSaving || !editingEntry) return
 
-  const existingPhotos = getEntryPhotos(editingEntry.id)
+  const saveEditDiesel = async () => {
+    if (editingSaving || !editingEntry) return
 
-  if (
-    !editMileage &&
-    !editLitres &&
-    editPhotoFiles.length === 0 &&
-    existingPhotos.length === 0
-  ) {
-    alert("Enter mileage, litres or add photo")
-    return
-  }
+    const existingPhotos = getEntryPhotos(editingEntry.id)
 
-  const mileageNumber = editMileage ? Number(editMileage) : null
-  const litresNumber = editLitres ? Number(editLitres) : null
+    if (
+      !editMileage &&
+      !editLitres &&
+      editPhotoFiles.length === 0 &&
+      existingPhotos.length === 0
+    ) {
+      alert("Enter mileage, litres or add photo")
+      return
+    }
 
-  if (mileageNumber !== null && mileageNumber <= 0) {
-    alert("Mileage must be higher than 0")
-    return
-  }
+    const mileageNumber = editMileage ? Number(editMileage) : null
+    const litresNumber = editLitres ? Number(editLitres) : null
 
-  if (litresNumber !== null && litresNumber <= 0) {
-    alert("Litres must be higher than 0")
-    return
-  }
+    if (mileageNumber !== null && mileageNumber <= 0) {
+      alert("Mileage must be higher than 0")
+      return
+    }
 
-  const localUpdatedEntry = {
-    ...editingEntry,
-    mileage: mileageNumber,
-    litres: litresNumber,
-    reg_number: editRegNumber || null,
-  }
+    if (litresNumber !== null && litresNumber <= 0) {
+      alert("Litres must be higher than 0")
+      return
+    }
 
-  setEntries((prev) =>
-    prev.map((entry) =>
+    setEditingSaving(true)
+
+    const now = new Date().toISOString()
+    const compressedFiles = await Promise.all(
+      editPhotoFiles.map((file) => compressImage(file))
+    )
+
+    const newLocalPhotos: DieselPhoto[] = await Promise.all(
+      compressedFiles.map(async (file, index) => ({
+        id: -Date.now() - index - 1,
+        diesel_entry_id: editingEntry.id,
+        driver_id: driverId,
+        photo_url: await fileToBase64(file),
+        photo_path: "",
+        created_at: now,
+        syncStatus: "pending" as SyncStatus,
+      }))
+    )
+
+    const localUpdatedEntry: DieselEntry = {
+      ...editingEntry,
+      mileage: mileageNumber,
+      litres: litresNumber,
+      reg_number: editRegNumber || null,
+      syncStatus:
+        editingEntry.id < 0 || editingEntry.syncStatus === "pending"
+          ? "pending"
+          : "edit_pending",
+    }
+
+    const nextEntries = entriesRef.current.map((entry) =>
       entry.id === editingEntry.id ? localUpdatedEntry : entry
     )
-  )
 
-setAllDieselEntries((prev) =>
-  prev.map((entry) =>
-    entry.id === editingEntry.id ? localUpdatedEntry : entry
-  )
-)
+    const nextPhotos = [...newLocalPhotos, ...photosRef.current]
 
-setEditingSaving(false)
-closeEdit()
-
-if (!navigator.onLine) {
-  return
-}
-
-  try {
-    const { data, error } = await supabase
-      .from("diesel_entries")
-      .update({
-        mileage: mileageNumber,
-        litres: litresNumber,
-        reg_number: editRegNumber || null,
-      })
-      .eq("id", editingEntry.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.log("DIESEL EDIT ERROR:", error)
-      return
-    }
-
-    if (data) {
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === data.id ? data : entry))
+    updateEntries(nextEntries)
+    updatePhotos(nextPhotos)
+    setAllDieselEntries((prev) =>
+      prev.map((entry) =>
+        entry.id === editingEntry.id ? localUpdatedEntry : entry
       )
+    )
+    saveLocal(nextEntries, nextPhotos)
 
-      setAllDieselEntries((prev) =>
-        prev.map((entry) => (entry.id === data.id ? data : entry))
-      )
+    setEditingSaving(false)
+    closeEdit()
 
-      await uploadAndInsertPhotos(data.id, editPhotoFiles)
-    }
-  } catch (error) {
-    console.log("DIESEL EDIT PHOTO ERROR:", error)
+    setTimeout(() => {
+      syncPendingDiesel()
+    }, 200)
   }
-}
 
   const deleteDieselPhoto = async (photo: DieselPhoto) => {
     if (!confirm("Delete this photo?")) return
 
-    const { error: storageError } = await supabase.storage
-      .from("entry-photos")
-      .remove([photo.photo_path])
+    let nextPhotos: DieselPhoto[]
 
-    if (storageError) {
-      console.log("DIESEL STORAGE DELETE ERROR:", storageError)
+    if (photo.id < 0 || photo.syncStatus === "pending") {
+      nextPhotos = photosRef.current.filter((item) => item.id !== photo.id)
+    } else {
+      nextPhotos = photosRef.current.map((item) =>
+        item.id === photo.id ? { ...item, syncStatus: "delete_pending" } : item
+      )
     }
 
-    const { error } = await supabase
-      .from("diesel_photos")
-      .delete()
-      .eq("id", photo.id)
+    updatePhotos(nextPhotos)
+    saveLocal(entriesRef.current, nextPhotos)
 
-    if (error) {
-      alert("Photo delete error")
-      return
-    }
-
-    setPhotos((prev) => prev.filter((item) => item.id !== photo.id))
+    setTimeout(() => {
+      syncPendingDiesel()
+    }, 200)
   }
 
   const deleteDieselEntry = async (id: number) => {
     if (!confirm("Delete this diesel entry?")) return
 
-    const entryPhotos = getEntryPhotos(id)
+    let nextEntries: DieselEntry[]
+    let nextPhotos: DieselPhoto[]
 
-    if (entryPhotos.length > 0) {
-      await supabase.storage
-        .from("entry-photos")
-        .remove(entryPhotos.map((photo) => photo.photo_path))
+    if (id < 0) {
+      nextEntries = entriesRef.current.filter((entry) => entry.id !== id)
+      nextPhotos = photosRef.current.filter((photo) => photo.diesel_entry_id !== id)
+    } else {
+      nextEntries = entriesRef.current.map((entry) =>
+        entry.id === id ? { ...entry, syncStatus: "delete_pending" } : entry
+      )
 
-      await supabase.from("diesel_photos").delete().eq("diesel_entry_id", id)
+      nextPhotos = photosRef.current.map((photo) =>
+        photo.diesel_entry_id === id
+          ? { ...photo, syncStatus: "delete_pending" }
+          : photo
+      )
     }
 
-    const { error } = await supabase.from("diesel_entries").delete().eq("id", id)
-
-    if (error) {
-      alert("Delete failed")
-      return
-    }
-
-    setEntries((prev) => prev.filter((entry) => entry.id !== id))
-    setAllDieselEntries((prev) => prev.filter((entry) => entry.id !== id))
-    setPhotos((prev) => prev.filter((photo) => photo.diesel_entry_id !== id))
+    updateEntries(nextEntries)
+    updatePhotos(nextPhotos)
+    setAllDieselEntries((prev) =>
+      prev.map((entry) =>
+        entry.id === id ? { ...entry, syncStatus: "delete_pending" } : entry
+      )
+    )
+    saveLocal(nextEntries, nextPhotos)
     closeEdit()
+
+    setTimeout(() => {
+      syncPendingDiesel()
+    }, 200)
   }
 
-  const currentWeekEntries = entries
+  const visibleEntries = entries.filter(
+    (entry) => entry.syncStatus !== "delete_pending"
+  )
+
+  const currentWeekEntries = visibleEntries
     .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
     .sort((a, b) => {
       const timeDiff = getEntryTime(a) - getEntryTime(b)
@@ -643,7 +1017,7 @@ if (!navigator.onLine) {
     0
   )
 
-  const archiveWeeks = entries
+  const archiveWeeks = visibleEntries
     .filter((entry) => getWeekTitle(entry.entry_date) !== currentWeekTitle)
     .reduce((groups, entry) => {
       const title = getWeekTitle(entry.entry_date)
@@ -707,6 +1081,9 @@ if (!navigator.onLine) {
                   <div className="flex gap-2">
                     <span>{displayDate(entry.entry_date)}</span>
                     <b>{entry.reg_number ?? assignedReg}</b>
+                    {entry.syncStatus && entry.syncStatus !== "synced" && (
+                      <span className="text-zinc-400">⏳</span>
+                    )}
                   </div>
 
                   <div>
@@ -722,22 +1099,22 @@ if (!navigator.onLine) {
                     </b>
                   </div>
 
-               {isBoss && average !== null && (
-  <>
-    <div>
-      Distance: <b>{average.miles}</b> miles
-    </div>
+                  {isBoss && average !== null && (
+                    <>
+                      <div>
+                        Distance: <b>{average.miles}</b> miles
+                      </div>
 
-    <div>
-      MPG: <b>{average.mpg.toFixed(1)}</b>
-    </div>
+                      <div>
+                        MPG: <b>{average.mpg.toFixed(1)}</b>
+                      </div>
 
-    <div>
-      L/100km:{" "}
-      <b>{average.litresPer100km.toFixed(1)}</b>
-    </div>
-  </>
-)}
+                      <div>
+                        L/100km:{" "}
+                        <b>{average.litresPer100km.toFixed(1)}</b>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {entryPhotos.length > 0 && (
@@ -1127,22 +1504,22 @@ if (!navigator.onLine) {
                             </b>
                           </div>
 
-                    {isBoss && average !== null && (
-  <>
-    <div>
-      Distance: <b>{average.miles}</b> miles
-    </div>
+                          {isBoss && average !== null && (
+                            <>
+                              <div>
+                                Distance: <b>{average.miles}</b> miles
+                              </div>
 
-    <div>
-      MPG: <b>{average.mpg.toFixed(1)}</b>
-    </div>
+                              <div>
+                                MPG: <b>{average.mpg.toFixed(1)}</b>
+                              </div>
 
-    <div>
-      L/100km:{" "}
-      <b>{average.litresPer100km.toFixed(1)}</b>
-    </div>
-  </>
-)}
+                              <div>
+                                L/100km:{" "}
+                                <b>{average.litresPer100km.toFixed(1)}</b>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         {entryPhotos.length > 0 && (
