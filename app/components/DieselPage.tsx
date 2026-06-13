@@ -281,6 +281,7 @@ const dieselPhotosStorageKey = `oneill-diesel-photos-${driverId}`
   loadDieselEntries()
   loadTrucks()
   loadAssignedTruck()
+}, [driverId])
 
 useEffect(() => {
   syncPendingDieselEntries()
@@ -295,8 +296,6 @@ useEffect(() => {
     window.removeEventListener("online", handleOnline)
   }
 }, [entries, photos])
-
-}, [driverId])
 
   const findPreviousEntryForSameTruck = (current: DieselEntry) => {
     const currentReg = normalizeReg(current.reg_number)
