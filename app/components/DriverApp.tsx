@@ -182,6 +182,7 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
 const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
 const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
 const [touchStartX, setTouchStartX] = useState<number | null>(null)
+const [photoSlideDirection, setPhotoSlideDirection] = useState<"left" | "right" | null>(null)
 
   const [showMainMenu, setShowMainMenu] = useState(false)
 
@@ -1604,23 +1605,40 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 
   if (currentIndex === -1) return
 
-  if (diff < 0 && currentIndex < previewPhotos.length - 1) {
-    setSelectedPhoto(previewPhotos[currentIndex + 1].photo_url)
-  }
+if (diff < 0 && currentIndex < previewPhotos.length - 1) {
+  setPhotoSlideDirection("left")
+  setSelectedPhoto(previewPhotos[currentIndex + 1].photo_url)
 
-  if (diff > 0 && currentIndex > 0) {
-    setSelectedPhoto(previewPhotos[currentIndex - 1].photo_url)
-  }
+  setTimeout(() => {
+    setPhotoSlideDirection(null)
+  }, 180)
+}
+
+if (diff > 0 && currentIndex > 0) {
+  setPhotoSlideDirection("right")
+  setSelectedPhoto(previewPhotos[currentIndex - 1].photo_url)
+
+  setTimeout(() => {
+    setPhotoSlideDirection(null)
+  }, 180)
+}
 
   setTouchStartX(null)
 }}
   >
-    <img
-      src={selectedPhoto}
-      alt="Full screen"
-      className="max-w-full max-h-full object-contain"
-      onClick={(e) => e.stopPropagation()}
-    />
+  <img
+  key={selectedPhoto}
+  src={selectedPhoto}
+  alt="Full screen"
+  className={`max-w-full max-h-full object-contain transition-all duration-200 ${
+    photoSlideDirection === "left"
+      ? "translate-x-2 opacity-90"
+      : photoSlideDirection === "right"
+      ? "-translate-x-2 opacity-90"
+      : "translate-x-0 opacity-100"
+  }`}
+  onClick={(e) => e.stopPropagation()}
+/>
   </div>
 )}
 
