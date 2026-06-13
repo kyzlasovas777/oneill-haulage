@@ -427,7 +427,7 @@ setShowAddDriver(false)
   const visibleDrivers = sortDrivers(drivers)
 
   return (
-    <main className="min-h-screen bg-[#efeff4] px-4 pt-[80px]">
+  <main className="h-screen overflow-hidden bg-[#efeff4] px-4 pt-[80px]">
  <div className="fixed top-0 left-0 right-0 z-[70] bg-[#efeff4] px-4 pt-4 h-[80px] flex items-center justify-between">
         <button
           onClick={onLogout}
@@ -450,7 +450,7 @@ setShowAddDriver(false)
       </div>
 
   
-<div className="space-y-2 pb-[80px]">
+<div className="h-[calc(100vh-160px)] overflow-y-auto space-y-2 pb-[80px]">
   {visibleDrivers.map((driver) => {
     const isActive = driver.active !== false
 
