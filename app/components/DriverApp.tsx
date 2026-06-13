@@ -181,7 +181,7 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
 
 const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
 const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
-
+const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
   const [showMainMenu, setShowMainMenu] = useState(false)
 
@@ -1587,11 +1587,43 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   <div
     className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
     onClick={() => setSelectedPhoto(null)}
+    onTouchStart={(e) => {
+      setTouchStartX(e.touches[0].clientX)
+    }}
+    onTouchEnd={(e) => {
+      if (touchStartX === null) return
+
+      const endX = e.changedTouches[0].clientX
+      const diff = endX - touchStartX
+
+      if (Math.abs(diff) < 50) return
+
+      const currentIndex = previewPhotos.findIndex(
+        (photo) => photo.photo_url === selectedPhoto
+      )
+
+      if (currentIndex === -1) return
+
+      if (diff < 0) {
+        const nextIndex =
+          currentIndex === previewPhotos.length - 1 ? 0 : currentIndex + 1
+
+        setSelectedPhoto(previewPhotos[nextIndex].photo_url)
+      } else {
+        const previousIndex =
+          currentIndex === 0 ? previewPhotos.length - 1 : currentIndex - 1
+
+        setSelectedPhoto(previewPhotos[previousIndex].photo_url)
+      }
+
+      setTouchStartX(null)
+    }}
   >
     <img
       src={selectedPhoto}
       alt="Full screen"
       className="max-w-full max-h-full object-contain"
+      onClick={(e) => e.stopPropagation()}
     />
   </div>
 )}
