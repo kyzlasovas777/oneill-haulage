@@ -1590,34 +1590,30 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     onTouchStart={(e) => {
       setTouchStartX(e.touches[0].clientX)
     }}
-    onTouchEnd={(e) => {
-      if (touchStartX === null) return
+  onTouchEnd={(e) => {
+  if (touchStartX === null) return
 
-      const endX = e.changedTouches[0].clientX
-      const diff = endX - touchStartX
+  const endX = e.changedTouches[0].clientX
+  const diff = endX - touchStartX
 
-      if (Math.abs(diff) < 50) return
+  if (Math.abs(diff) < 50) return
 
-      const currentIndex = previewPhotos.findIndex(
-        (photo) => photo.photo_url === selectedPhoto
-      )
+  const currentIndex = previewPhotos.findIndex(
+    (photo) => photo.photo_url === selectedPhoto
+  )
 
-      if (currentIndex === -1) return
+  if (currentIndex === -1) return
 
-      if (diff < 0) {
-        const nextIndex =
-          currentIndex === previewPhotos.length - 1 ? 0 : currentIndex + 1
+  if (diff < 0 && currentIndex < previewPhotos.length - 1) {
+    setSelectedPhoto(previewPhotos[currentIndex + 1].photo_url)
+  }
 
-        setSelectedPhoto(previewPhotos[nextIndex].photo_url)
-      } else {
-        const previousIndex =
-          currentIndex === 0 ? previewPhotos.length - 1 : currentIndex - 1
+  if (diff > 0 && currentIndex > 0) {
+    setSelectedPhoto(previewPhotos[currentIndex - 1].photo_url)
+  }
 
-        setSelectedPhoto(previewPhotos[previousIndex].photo_url)
-      }
-
-      setTouchStartX(null)
-    }}
+  setTouchStartX(null)
+}}
   >
     <img
       src={selectedPhoto}
