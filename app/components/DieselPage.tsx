@@ -394,13 +394,16 @@ export default function DieselPage({
     if (data) setPhotos((prev) => [...data, ...prev])
   }
 
-  const openEdit = (entry: DieselEntry) => {
-    setEditingEntry(entry)
-    setEditMileage(entry.mileage === null ? "" : String(entry.mileage))
-    setEditLitres(entry.litres === null ? "" : String(entry.litres))
-    setEditRegNumber(entry.reg_number ?? "")
-    clearEditPhotos()
-  }
+const openEdit = (entry: DieselEntry) => {
+  console.log("OPEN EDIT ENTRY:", entry)
+
+  setEditMileage(entry.mileage === null ? "" : String(entry.mileage))
+  setEditLitres(entry.litres === null ? "" : String(entry.litres))
+  setEditRegNumber(entry.reg_number ?? "")
+  setEditPhotoFiles([])
+  setEditPhotoPreviews([])
+  setEditingEntry(entry)
+}
 
   const closeEdit = () => {
     setEditingEntry(null)
@@ -565,7 +568,7 @@ const saveEditDiesel = async () => {
 
 const deleteDieselPhoto = async (photo: DieselPhoto) => {
   if (!confirm("Delete this photo?")) return
-
+ 
     const { error: storageError } = await supabase.storage
       .from("entry-photos")
       .remove([photo.photo_path])
