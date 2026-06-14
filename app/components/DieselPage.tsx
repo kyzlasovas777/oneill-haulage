@@ -564,6 +564,7 @@ const saveEditDiesel = async () => {
 }
 
 const deleteDieselPhoto = async (photo: DieselPhoto) => {
+  if (!confirm("Delete this photo?")) return
 
     const { error: storageError } = await supabase.storage
       .from("entry-photos")
@@ -587,6 +588,7 @@ const deleteDieselPhoto = async (photo: DieselPhoto) => {
   }
 
 const deleteDieselEntry = async (id: number) => {
+  if (!confirm("Delete this diesel entry?")) return
 
     const entryPhotos = getEntryPhotos(id)
 
