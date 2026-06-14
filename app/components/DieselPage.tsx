@@ -206,6 +206,8 @@ export default function DieselPage({
   const editPhotoInputRef = useRef<HTMLInputElement | null>(null)
   const [editingSaving, setEditingSaving] = useState(false)
 
+  const [localLoaded, setLocalLoaded] = useState(false)
+
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [activeArchiveWeek, setActiveArchiveWeek] = useState<string | null>(null)
 
@@ -409,18 +411,16 @@ export default function DieselPage({
     setAssignedReg(data?.truck_reg ?? "")
   }
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(dieselEntriesStorageKey, JSON.stringify(entries))
-      localStorage.setItem(dieselPhotosStorageKey, JSON.stringify(photos))
-      localStorage.setItem(
-        dieselPhotoDeletesStorageKey,
-        JSON.stringify(pendingPhotoDeletes)
-      )
-    } catch (error) {
-      console.log("DIESEL LOCAL SAVE ERROR:", error)
-    }
-  }, [entries, photos, pendingPhotoDeletes])
+useEffect(() => {
+  if (!localLoaded) return
+
+  try {
+    localStorage.setItem(dieselEntriesStorageKey, JSON.stringify(entries))
+    localStorage.setItem(dieselPhotosStorageKey, JSON.stringify(photos))
+  } catch (error) {
+    console.log("DIESEL LOCAL SAVE ERROR:", error)
+  }
+}, [entries, photos, localLoaded])
 
   useEffect(() => {
     try {
@@ -444,6 +444,8 @@ export default function DieselPage({
     } catch (error) {
       console.log("DIESEL LOCAL LOAD ERROR:", error)
     }
+
+    setLocalLoaded(true)
 
     loadDieselEntries()
     loadTrucks()
@@ -595,9 +597,11 @@ export default function DieselPage({
   }
 
 useEffect(() => {
-  const handleOnline = () => {
-    syncPendingDieselEntries()
-    loadDieselEntries()
+  if (!localLoaded) return
+
+  const handleOnline = async () => {
+    await syncPendingDieselEntries()
+    await loadDieselEntries()
   }
 
   window.addEventListener("online", handleOnline)
@@ -605,7 +609,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener("online", handleOnline)
   }
-}, [])
+}, [localLoaded])
 
   const findPreviousEntryForSameTruck = (current: DieselEntry) => {
     const currentReg = normalizeReg(current.reg_number)
