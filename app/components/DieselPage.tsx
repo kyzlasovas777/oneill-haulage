@@ -521,31 +521,7 @@ const saveEditDiesel = async () => {
     return
   }
 
-  const localUpdatedEntry = {
-    ...editingEntry,
-    mileage: mileageNumber,
-    litres: litresNumber,
-    reg_number: editRegNumber || null,
-  }
-
-  setEntries((prev) =>
-    prev.map((entry) =>
-      entry.id === editingEntry.id ? localUpdatedEntry : entry
-    )
-  )
-
-setAllDieselEntries((prev) =>
-  prev.map((entry) =>
-    entry.id === editingEntry.id ? localUpdatedEntry : entry
-  )
-)
-
-setEditingSaving(false)
-closeEdit()
-
-if (!navigator.onLine) {
-  return
-}
+  setEditingSaving(true)
 
   try {
     const { data, error } = await supabase
@@ -561,6 +537,8 @@ if (!navigator.onLine) {
 
     if (error) {
       console.log("DIESEL EDIT ERROR:", error)
+      alert(JSON.stringify(error))
+      setEditingSaving(false)
       return
     }
 
@@ -575,9 +553,14 @@ if (!navigator.onLine) {
 
       await uploadAndInsertPhotos(data.id, editPhotoFiles)
     }
+
+    closeEdit()
   } catch (error) {
     console.log("DIESEL EDIT PHOTO ERROR:", error)
+    alert(JSON.stringify(error))
   }
+
+  setEditingSaving(false)
 }
 
   const deleteDieselPhoto = async (photo: DieselPhoto) => {
