@@ -1593,7 +1593,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 <img
   src={selectedPhoto}
   alt="Full screen"
-  className="max-w-full max-h-full object-contain"
+  className="max-w-none max-h-none object-contain"
 />
   </div>
 )}
