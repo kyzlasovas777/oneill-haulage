@@ -1588,13 +1588,12 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   <div
     className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
     onClick={() => setSelectedPhoto(null)}
-
   >
-<img
-  src={selectedPhoto}
-  alt="Full screen"
- className="max-w-full max-h-full object-contain"
-/>
+    <img
+      src={selectedPhoto}
+      alt="Full screen"
+      className="max-w-full max-h-full object-contain"
+    />
   </div>
 )}
 
