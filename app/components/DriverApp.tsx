@@ -866,7 +866,7 @@ const filesToBase64 = async (files: File[]) => {
 
       img.onload = () => {
         const canvas = document.createElement("canvas")
-        const maxWidth = 1000
+        const maxWidth = 2600
         const scale = Math.min(1, maxWidth / img.width)
 
         canvas.width = img.width * scale
@@ -880,7 +880,7 @@ const filesToBase64 = async (files: File[]) => {
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
 
-        resolve(canvas.toDataURL("image/jpeg", 0.55))
+        resolve(canvas.toDataURL("image/jpeg", 0.90))
       }
 
       reader.onerror = reject
