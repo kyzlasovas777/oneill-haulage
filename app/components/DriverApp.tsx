@@ -179,6 +179,24 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
 
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
 
+  useEffect(() => {
+  const viewport = document.querySelector("meta[name='viewport']")
+
+  if (!viewport) return
+
+  if (selectedPhoto) {
+    viewport.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes"
+    )
+  } else {
+    viewport.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    )
+  }
+}, [selectedPhoto])
+
 const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
 const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
 
