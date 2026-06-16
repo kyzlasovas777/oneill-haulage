@@ -1021,51 +1021,61 @@ setNewEntry({
 
   return (
    <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
-      <div className="px-4 pt-6 pb-1">
-        <div className="flex items-center justify-between">
+<div className="px-4 pt-6 pb-3">
+  <div className="relative flex items-center justify-between">
     <button
-  onClick={handleBackButton}
-  className="text-blue-500 text-[18px] font-medium"
->
-{screen === "main" && !isBoss ? "Logout" : "← Back"}
-</button>
+      onClick={handleBackButton}
+      className="text-blue-500 text-[18px] font-medium"
+    >
+      {screen === "main" && !isBoss ? "Logout" : "← Back"}
+    </button>
 
-          <div className="flex flex-col items-center">
-            <h1 className="text-[24px] font-black tracking-tight text-black">
-              {screen === "archives" ? "Archives" : visibleTitle}
-            </h1>
+ <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+      <h1 className="text-[24px] font-black tracking-tight text-black">
+        {screen === "archives" ? "Archives" : visibleTitle}
+      </h1>
 
-            {driverName && (
-              <p className="text-[20px] font-bold text-black">
-                {driverName}
-              </p>
-            )}
+      {driverName && (
+        <p className="text-[20px] font-bold text-black flex items-center justify-center gap-2">
+          {driverName}
 
-         <p
-  className={
-    syncText === "Synced" || syncText === "Loaded"
-      ? "text-[12px] font-bold text-green-600"
-      : "text-[11px] font-bold text-zinc-400"
-  }
->
-              {syncing
-                ? "🔄 Syncing"
+          <span
+            className={
+              syncing
+                ? "text-[12px] text-blue-500"
                 : syncText === "Synced" || syncText === "Loaded"
-              ? (
-  <>
-    <span className="text-green-600">✔</span>
-    <span className="text-black"> Synced</span>
-  </>
-)
-                : "⏳ Offline"}
-            </p>
-          </div>
+                ? "text-[12px] text-green-600"
+                : "text-[12px] text-zinc-500"
+            }
+          >
+            {syncing
+              ? "🔄 Syncing"
+              : syncText === "Synced" || syncText === "Loaded"
+              ? "✔ Synced"
+              : "⏳ Offline"}
+          </span>
+        </p>
+      )}
+    </div>
 
- {screen === "miles" && (
-<MilesPage
-  driverId={driverId}
-  onBack={() => setScreen("main")}
-/>
+    {screen === "main" || screen === "archives" || screen === "archive" ? (
+      <button
+        onClick={() => setShowMainMenu(true)}
+        className="text-[30px] text-blue-500"
+      >
+        ☰
+      </button>
+    ) : (
+      <div className="w-[30px]" />
+    )}
+  </div>
+</div>
+
+{screen === "miles" && (
+  <MilesPage
+    driverId={driverId}
+    onBack={() => setScreen("main")}
+  />
 )}
 
 {screen === "diesel" && (
@@ -1075,60 +1085,38 @@ setNewEntry({
     isBoss={isBoss}
   />
 )}
+{screen === "archives" ? (
+  <div className="flex-1 px-3 overflow-y-auto pb-[90px]">
+    <div className="space-y-2">
+      {archives.length === 0 && (
+        <p className="text-center text-zinc-400 mt-10">No archives yet</p>
+      )}
 
-        {screen === "main" ? (
-  <button
-    onClick={() => setShowMainMenu(true)}
-    className="text-[30px] text-blue-500"
-  >
-    ☰
-  </button>
-) : screen === "archive" && isBoss ? (
-<button
-  onClick={exportToExcel}
-  className="h-[40px] px-3 rounded-[12px] bg-white flex items-center gap-2 text-[16px] font-semibold text-black"
->
-  <span>📊</span>
-  Export to Excel
-</button>
+      {archives.map((archive) => (
+        <button
+          key={archive.id}
+          onClick={() => {
+            setActiveArchiveId(archive.id)
+            setScreen("archive")
+          }}
+          className="w-full h-[54px] rounded-[16px] bg-white px-4 relative flex items-center active:scale-[0.98] transition-all"
+        >
+          <span className="absolute left-4 text-[13px] text-zinc-400">
+            {new Date().getFullYear()}
+          </span>
+
+          <span className="w-full text-center text-[16px] font-bold text-black">
+            {formatWeekTitle(archive.title)}
+          </span>
+
+          <span className="absolute right-4 text-[13px] text-zinc-400">
+            {archive.entries.length} rows
+          </span>
+        </button>
+      ))}
+    </div>
+  </div>
 ) : (
-  <div className="w-5" />
-)}
-        </div>
-      </div>
-
-      {screen === "archives" ? (
-        <div className="flex-1 px-3 overflow-y-auto pb-[90px]">
-          <div className="space-y-2">
-            {archives.length === 0 && (
-              <p className="text-center text-zinc-400 mt-10">No archives yet</p>
-            )}
-
-            {archives.map((archive) => (
-              <button
-                key={archive.id}
-                onClick={() => {
-                  setActiveArchiveId(archive.id)
-                  setScreen("archive")
-                }}
-                className="w-full h-[54px] rounded-[16px] bg-white px-4 relative flex items-center active:scale-[0.98] transition-all"
-              >
-                <span className="absolute left-4 text-[13px] text-zinc-400">
-                  {new Date().getFullYear()}
-                </span>
-
-               <span className="w-full text-center text-[16px] font-bold text-black">
-  {formatWeekTitle(archive.title)}
-</span>
-
-                <span className="absolute right-4 text-[13px] text-zinc-400">
-                  {archive.entries.length} rows
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
         <div
   ref={listRef}
 className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
@@ -1274,7 +1262,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   Diesel
 </button>
 
-{isBoss && (
+{isBoss && screen === "archive" && (
 <button
   onClick={exportToExcel}
   className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]"
