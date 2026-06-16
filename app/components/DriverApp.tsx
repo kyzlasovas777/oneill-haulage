@@ -1329,18 +1329,18 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     Edit
   </button>
 
-  {previewEntry?.id === visibleEntries[visibleEntries.length - 1]?.id && (
-    <button
-   onClick={() => {
-  deleteEntry(previewEntry!)
-  setPreviewEntry(null)
-  setPreviewPhotos([])
-}}
-      className="flex-1 h-[46px] rounded-[16px] bg-red-500 text-white font-bold"
-    >
-      Delete
-    </button>
-  )}
+{(isBoss || previewEntry?.id === visibleEntries[visibleEntries.length - 1]?.id) && (
+  <button
+    onClick={() => {
+      deleteEntry(previewEntry!)
+      setPreviewEntry(null)
+      setPreviewPhotos([])
+    }}
+    className="flex-1 h-[46px] rounded-[16px] bg-red-500 text-white font-bold"
+  >
+    Delete
+  </button>
+)}
 
   <button
     onClick={() => {
