@@ -737,11 +737,11 @@ const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverNa
               return
             }
 
-            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 2600))
+            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 1800))
             resolve(blob)
           },
           "image/jpeg",
-          0.90
+          0.82
         )
       }
 
@@ -866,7 +866,7 @@ const filesToBase64 = async (files: File[]) => {
 
       img.onload = () => {
         const canvas = document.createElement("canvas")
-        const maxWidth = 2600
+        const maxWidth = 1800
         const scale = Math.min(1, maxWidth / img.width)
 
         canvas.width = img.width * scale
@@ -880,7 +880,7 @@ const filesToBase64 = async (files: File[]) => {
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
 
-        resolve(canvas.toDataURL("image/jpeg", 0.90))
+        resolve(canvas.toDataURL("image/jpeg", 0.82))
       }
 
       reader.onerror = reject
