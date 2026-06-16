@@ -465,8 +465,8 @@ setShowAddDriver(false)
  <div className="grid grid-cols-2 gap-4 mb-2">
   <div className="space-y-1">
     <p className="h-[22px] text-[18px] font-bold text-black leading-tight">
-      {isActive ? "🟢 " : "⚫ "}
-      {driver.name}
+    {isActive ? "☘️" : "🍂"}{" "}
+{driver.name}
       {driver.syncStatus === "pending" ? " ⏳" : ""}
     </p>
 
