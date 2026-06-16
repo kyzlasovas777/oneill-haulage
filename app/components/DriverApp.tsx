@@ -737,11 +737,11 @@ const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverNa
               return
             }
 
-            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 1024))
+            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 2600))
             resolve(blob)
           },
           "image/jpeg",
-          0.80
+          0.90
         )
       }
 
