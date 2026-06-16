@@ -716,7 +716,7 @@ const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverNa
 
       img.onload = () => {
         const canvas = document.createElement("canvas")
-        const maxWidth = 2000
+        const maxWidth = 1600
         const scale = Math.min(1, maxWidth / img.width)
 
         canvas.width = img.width * scale
