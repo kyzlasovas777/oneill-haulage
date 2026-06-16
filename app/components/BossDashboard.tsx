@@ -525,14 +525,7 @@ setShowAddDriver(false)
     )
   })}
 
- <div className="fixed bottom-0 left-0 right-0 z-[50] bg-[#efeff4] pt-2 pb-4 px-4">
-  <button
-    onClick={openAddDriver}
-    className="w-full h-[46px] rounded-[18px] bg-blue-500 text-white text-[17px] font-bold"
-  >
-    + Add Driver
-  </button>
-</div>
+
 </div>
 
   {showBossMenu && (
@@ -553,6 +546,17 @@ setShowAddDriver(false)
       >
         Trucks
       </button>
+
+<button
+  onClick={() => {
+    setShowBossMenu(false)
+    openAddDriver()
+  }}
+  className="w-full h-[44px] rounded-[14px] text-black text-[17px] font-bold"
+>
+  + Add Driver
+</button>
+
     </div>
   </div>
 )}
