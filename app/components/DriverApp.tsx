@@ -1058,7 +1058,7 @@ className={
           : syncText === "Synced" || syncText === "Loaded"
           ? (
             <>
-              <span className="text-green-600">✔</span>
+      <span className="text-green-600 font-bold">&#10003;</span>
               <span className="text-black"> Synced</span>
             </>
           )
@@ -1188,7 +1188,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                      {entry.syncStatus === "pending"
   ? "⌛"
   : entry.syncStatus === "synced"
-  ? <span className="text-green-600 font-bold">✔</span>
+? <span className="text-green-600 font-bold">&#10003;</span>
   : ""}
                     </div>
                   </div>
