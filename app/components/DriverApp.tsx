@@ -1021,8 +1021,8 @@ setNewEntry({
 
   return (
    <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
-<div className="px-4 pt-6 pb-3">
-  <div className="relative flex items-center justify-between">
+<div className="px-4 pt-6 pb-1">
+  <div className="flex items-center justify-between">
     <button
       onClick={handleBackButton}
       className="text-blue-500 text-[18px] font-medium"
@@ -1030,43 +1030,53 @@ setNewEntry({
       {screen === "main" && !isBoss ? "Logout" : "← Back"}
     </button>
 
- <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+    <div className="flex flex-col items-center">
       <h1 className="text-[24px] font-black tracking-tight text-black">
         {screen === "archives" ? "Archives" : visibleTitle}
       </h1>
 
       {driverName && (
-        <p className="text-[20px] font-bold text-black flex items-center justify-center gap-2">
+        <p className="text-[20px] font-bold text-black">
           {driverName}
-
-          <span
-            className={
-              syncing
-                ? "text-[12px] text-blue-500"
-                : syncText === "Synced" || syncText === "Loaded"
-                ? "text-[12px] text-green-600"
-                : "text-[12px] text-zinc-500"
-            }
-          >
-            {syncing
-              ? "🔄 Syncing"
-              : syncText === "Synced" || syncText === "Loaded"
-              ? "✔ Synced"
-              : "⏳ Offline"}
-          </span>
         </p>
       )}
+
+      <p
+        className={
+          syncText === "Synced" || syncText === "Loaded"
+            ? "text-[12px] font-bold text-green-600"
+            : "text-[11px] font-bold text-zinc-400"
+        }
+      >
+        {syncing
+          ? "🔄 Syncing"
+          : syncText === "Synced" || syncText === "Loaded"
+          ? (
+            <>
+              <span className="text-green-600">✔</span>
+              <span className="text-black"> Synced</span>
+            </>
+          )
+          : "⏳ Offline"}
+      </p>
     </div>
 
-    {screen === "main" || screen === "archives" || screen === "archive" ? (
+   {screen === "main" ? (
       <button
         onClick={() => setShowMainMenu(true)}
         className="text-[30px] text-blue-500"
       >
         ☰
       </button>
+    ) : screen === "archive" && isBoss ? (
+      <button
+        onClick={exportToExcel}
+        className="text-[28px]"
+      >
+        📊
+      </button>
     ) : (
-      <div className="w-[30px]" />
+      <div className="w-5" />
     )}
   </div>
 </div>
@@ -1262,7 +1272,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
   Diesel
 </button>
 
-{isBoss && screen === "archive" && (
+{isBoss && screen === "main" && (
 <button
   onClick={exportToExcel}
   className="w-full h-[52px] px-6 flex items-center gap-4 text-[20px]"
@@ -1606,3 +1616,4 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     </main>
   )
 }
+
