@@ -458,9 +458,9 @@ setShowAddDriver(false)
       <div
         key={`${driver.id}-${refreshKey}`}
         onClick={() => onOpenDriver(driver)}
-        className={`rounded-[18px] p-2 active:scale-[0.98] transition-all ${
-          isActive ? "bg-white" : "bg-zinc-200 opacity-70"
-        }`}
+      className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] transition-all ${
+  isActive ? "bg-white" : "bg-zinc-200 opacity-70"
+}`}
       >
  <div className="grid grid-cols-2 gap-4 mb-2">
   <div className="space-y-1">

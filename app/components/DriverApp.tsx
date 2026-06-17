@@ -1034,7 +1034,7 @@ className={
   {screen === "main" && !isBoss ? "Logout" : "‹"}
 </button>
 
-  <div className="bg-white border-2 border-green-500 rounded-[18px] px-4 py-1 flex flex-col items-center shadow-sm">
+  <div className="bg-white border border-green-400 rounded-[18px] px-4 py-1 flex flex-col items-center shadow-sm">
       <h1 className="text-[24px] font-black tracking-tight text-black">
         {screen === "archives" ? "Archives" : visibleTitle}
       </h1>
