@@ -1034,13 +1034,14 @@ className={
   {screen === "main" && !isBoss ? "Logout" : "‹"}
 </button>
 
-  <div className="bg-white border border-green-400 rounded-[18px] px-4 py-1 flex flex-col items-center shadow-sm">
-      <h1 className="text-[24px] font-black tracking-tight text-black">
-        {screen === "archives" ? "Archives" : visibleTitle}
-      </h1>
+ <div className="bg-white border border-green-400 rounded-[18px] px-4 py-1 flex flex-col items-center">
+
+  <h1 className="text-[17px] font-normal tracking-tight text-black">
+    {screen === "archives" ? "Archives" : visibleTitle}
+  </h1>
 
       {driverName && (
-        <p className="text-[20px] font-bold text-black">
+        <p className="text-[20px] font-medium text-black">
           {driverName}
         </p>
       )}
@@ -1048,8 +1049,8 @@ className={
       <p
         className={
           syncText === "Synced" || syncText === "Loaded"
-            ? "text-[12px] font-bold text-green-600"
-            : "text-[11px] font-bold text-zinc-400"
+            ? "text-[12px] font-normal text-green-600"
+            : "text-[11px] font-normal text-zinc-400"
         }
       >
         {syncing
