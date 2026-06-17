@@ -1238,7 +1238,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                 setScreen("archives")
                 setShowMainMenu(false)
               }}
-             className="w-full h-[40px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+             className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
             >
               <span>▰</span>
               Archives
@@ -1249,7 +1249,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                 setShowMainMenu(false)
                 setShowPlaceModal(true)
               }}
-            className="w-full h-[40px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+            className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
             >
               <span>＋</span>
               Add Place
@@ -1260,7 +1260,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     setScreen("miles")
     setShowMainMenu(false)
   }}
-  className="w-full h-[40px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
   <span>🛣️</span>
   Miles
@@ -1271,7 +1271,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
     setScreen("diesel")
     setShowMainMenu(false)
   }}
-  className="w-full h-[40px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
   <span>⛽</span>
   Diesel
@@ -1280,7 +1280,7 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
 {isBoss && screen === "main" && (
 <button
   onClick={exportToExcel}
-  className="w-full h-[40px] px-6 flex items-center gap-4 text-[17px]"
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
     <span>📊</span>
     Export to Excel
