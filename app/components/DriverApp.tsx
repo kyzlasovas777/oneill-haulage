@@ -1023,12 +1023,16 @@ setNewEntry({
    <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
 <div className="px-4 pt-4 pb-2">
   <div className="flex items-center justify-between">
-    <button
-      onClick={handleBackButton}
-      className="text-blue-500 text-[18px] font-medium"
-    >
-      {screen === "main" && !isBoss ? "Logout" : "← Back"}
-    </button>
+   <button
+  onClick={handleBackButton}
+className={
+  screen === "main" && !isBoss
+    ? "text-blue-500 text-[17px] font-bold"
+    : "w-[30px] text-[34px] text-blue-500 leading-none"
+}
+>
+  {screen === "main" && !isBoss ? "Logout" : "‹"}
+</button>
 
   <div className="bg-white border-2 border-green-500 rounded-[18px] px-4 py-1 flex flex-col items-center shadow-sm">
       <h1 className="text-[24px] font-black tracking-tight text-black">
