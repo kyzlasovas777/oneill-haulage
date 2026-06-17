@@ -542,7 +542,7 @@ setShowAddDriver(false)
   setShowBossMenu(false)
   setShowTrucks(true)
 }}
-        className="w-full h-[44px] rounded-[14px] text-black text-[17px] font-bold"
+       className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
       >
         Trucks
       </button>
@@ -552,7 +552,7 @@ setShowAddDriver(false)
     setShowBossMenu(false)
     openAddDriver()
   }}
-  className="w-full h-[44px] rounded-[14px] text-black text-[17px] font-bold"
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
   + Add Driver
 </button>
