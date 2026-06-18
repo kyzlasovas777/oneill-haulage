@@ -1020,7 +1020,7 @@ setNewEntry({
   }
 
   return (
-   <main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
+<main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
 <div className="px-4 pt-4 pb-2">
   <div className="flex items-center justify-between">
    <button
@@ -1148,8 +1148,8 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
                     key={entry.id}
   onClick={() => openPreview(entry)}
                    
-                    className="select-none bg-white rounded-[14px] h-[34px] px-3 flex items-center active:scale-[0.98] transition-all"
-                  >
+className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34px] px-3 flex items-center"
+                >
                     <div className="w-[72px] shrink-0">
                       <p className="select-none text-[12px] font-bold text-black truncate">
                         {entry.trailer}
@@ -1202,7 +1202,9 @@ className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
       )}
 
       {screen !== "archives" && (
-        <div className="shrink-0 px-3 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 bg-[#efeff4]">
+        <div 
+        className="shrink-0 px-3 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 bg-white"
+        >
           <button
             onClick={() => {
               setEditingId(null)
