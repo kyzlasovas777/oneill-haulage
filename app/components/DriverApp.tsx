@@ -1102,7 +1102,7 @@ className={
 )}
 {screen === "archives" ? (
   <div className="flex-1 px-3 overflow-y-auto pb-[90px]">
-    <div className="space-y-2">
+    <div className="space-y-1">
       {archives.length === 0 && (
         <p className="text-center text-zinc-400 mt-10">No archives yet</p>
       )}
@@ -1114,7 +1114,7 @@ className={
             setActiveArchiveId(archive.id)
             setScreen("archive")
           }}
-          className="w-full h-[54px] rounded-[16px] bg-white px-4 relative flex items-center active:scale-[0.98] transition-all"
+         className="w-full h-[34px] rounded-[14px] bg-[#f5f5f5] border border-[#eeeeee] px-3 relative flex items-center active:scale-[0.98] transition-all"
         >
           <span className="absolute left-4 text-[13px] text-zinc-400">
             {new Date().getFullYear()}
