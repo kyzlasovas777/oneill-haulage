@@ -1021,7 +1021,7 @@ setNewEntry({
 
   return (
 <main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
-<div className="px-4 pt-4 pb-2">
+<div className="px-4 pt-2 pb-2">
   <div className="flex items-center justify-between">
    <button
   onClick={handleBackButton}

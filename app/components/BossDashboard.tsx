@@ -428,7 +428,7 @@ setShowAddDriver(false)
 
   return (
 <main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
-<div className="relative bg-white px-4 pt-4 h-[80px] ...">
+<div className="relative bg-white px-4 pt-4 h-[80px] flex items-center justify-between">
         <button
           onClick={onLogout}
           className="text-blue-500 text-[17px] font-bold"
