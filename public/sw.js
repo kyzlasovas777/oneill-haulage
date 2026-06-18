@@ -1,5 +1,11 @@
-const CACHE_NAME = "oneill-haulage-v3"
-const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"]
+const CACHE_NAME = "oneill-haulage-v4"
+const APP_SHELL = [
+  "/",
+  "/manifest.json",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon.clear.png",
+]
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
