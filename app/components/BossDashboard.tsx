@@ -427,8 +427,8 @@ setShowAddDriver(false)
   const visibleDrivers = sortDrivers(drivers)
 
   return (
-<main className="h-[100dvh] bg-[#efeff4] flex flex-col w-full overflow-hidden">
-<div className="relative bg-[#efeff4] px-4 pt-4 h-[80px] flex items-center justify-between shrink-0">
+<main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
+<div className="relative bg-white px-4 pt-4 h-[80px] ...">
         <button
           onClick={onLogout}
           className="text-blue-500 text-[17px] font-bold"
@@ -458,8 +458,8 @@ setShowAddDriver(false)
       <div
         key={`${driver.id}-${refreshKey}`}
         onClick={() => onOpenDriver(driver)}
-      className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] transition-all ${
-  isActive ? "bg-white" : "bg-zinc-200 opacity-70"
+className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] transition-all ${
+  isActive ? "bg-[#f5f5f5]" : "bg-[#f5f5f5] opacity-70"
 }`}
       >
  <div className="grid grid-cols-2 gap-4 mb-2">
