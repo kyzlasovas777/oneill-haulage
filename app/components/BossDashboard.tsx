@@ -530,22 +530,24 @@ className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] trans
 
   {showBossMenu && (
   <div
-    className="fixed inset-0 z-[80]"
+  
+  className="fixed inset-0 z-[70] bg-black/10 flex items-start justify-end pt-[105px] pr-4"
     onClick={() => setShowBossMenu(false)}
   >
-    <div
-      className="absolute top-[62px] right-4 w-[170px] rounded-[18px] bg-white shadow-xl p-2"
+   <div
+  className="w-[220px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-     onClick={() => {
-  setShowBossMenu(false)
-  setShowTrucks(true)
-}}
-       className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
-      >
-        Trucks
-      </button>
+<button
+  onClick={() => {
+    setShowBossMenu(false)
+    setShowTrucks(true)
+  }}
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+>
+<span className="w-6 text-center text-[22px]">🚛</span>
+Trucks
+</button>
 
 <button
   onClick={() => {
@@ -554,7 +556,8 @@ className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] trans
   }}
   className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
-  + Add Driver
+ <span className="w-6 text-center text-[22px]">👤</span>
+Add Driver
 </button>
 
     </div>

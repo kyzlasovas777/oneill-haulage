@@ -1233,7 +1233,7 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-[220-px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
+            className="w-[220px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
           >
             <button
               onClick={() => {
@@ -1242,8 +1242,8 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
               }}
              className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
             >
-              <span>▰</span>
-              Archives
+<span className="w-6 text-center text-[22px] text-yellow-500 font-extrabold">▰</span>
+Archives
             </button>
 
             <button
@@ -1253,8 +1253,8 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
               }}
             className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
             >
-              <span>＋</span>
-              Add Place
+<span className="w-6 text-center text-[22px] text-blue-500 font-extrabold">+</span>
+Add Place
             </button>
 
   <button
@@ -1264,7 +1264,7 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
   }}
   className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
-  <span>🛣️</span>
+  <span className="w-6 text-center text-[22px]">🛣️</span>
   Miles
 </button>
 
@@ -1275,7 +1275,7 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
   }}
   className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
-  <span>⛽</span>
+  <span className="w-6 text-center text-[22px]">⛽</span>
   Diesel
 </button>
 
@@ -1284,7 +1284,7 @@ className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34
   onClick={exportToExcel}
   className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
 >
-    <span>📊</span>
+    <span className="w-6 text-center text-[22px]">📊</span>
     Export to Excel
   </button>
 )}
