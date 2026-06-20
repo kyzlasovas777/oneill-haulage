@@ -538,11 +538,13 @@ const visibleTotal = visibleEntries.reduce(
   {archiveOpen ? "Miles Archive" : "Miles"}
 </div>
 
-          <div className="text-[14px]">
-            <span className="text-zinc-500">This week</span>{" "}
-            <b>{weekTotal}</b>{" "}
-            <span className="text-zinc-500">miles</span>
-          </div>
+         {!archiveOpen && (
+  <div className="text-[14px]">
+    <span className="text-zinc-500">This week</span>{" "}
+    <b>{weekTotal}</b>{" "}
+    <span className="text-zinc-500">miles</span>
+  </div>
+)}
         </div>
 
 {!archiveOpen && (

@@ -1131,11 +1131,11 @@ const visibleEntries = isArchiveMode
          <div className="text-[22px] font-bold">
   {archiveOpen ? "Diesel Archive" : "Diesel"}
 </div>
-      <div className="text-[14px] font-bold">
-  {isArchiveMode
-    ? `${visibleLitres.toFixed(2)} L`
-    : `This week ${weekLitres.toFixed(2)} L`}
-</div>
+{!archiveOpen && (
+  <div className="text-[14px] font-bold">
+    This week {weekLitres.toFixed(2)} L
+  </div>
+)}
         </div>
 
         
