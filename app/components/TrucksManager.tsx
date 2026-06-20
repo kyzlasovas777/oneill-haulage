@@ -10,9 +10,19 @@ type Truck = {
 
 type TrucksManagerProps = {
   onClose: () => void
+  dieselStats?: Record<
+    string,
+    {
+      mpg: number
+      l100: number
+    }
+  >
 }
 
-export default function TrucksManager({ onClose }: TrucksManagerProps) {
+export default function TrucksManager({
+  onClose,
+  dieselStats,
+}: TrucksManagerProps) {
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -109,9 +119,9 @@ export default function TrucksManager({ onClose }: TrucksManagerProps) {
   return (
     <div className="fixed inset-0 bg-black/30 z-[90] flex items-center justify-center px-4">
       <div className="w-full max-w-[340px] bg-[#efeff4] rounded-[30px] px-4 pt-6 pb-5 shadow-xl">
-        <h2 className="text-center text-[22px] font-bold text-black mb-5">
-          Trucks
-        </h2>
+<h2 className="text-center text-[32px] mb-5">
+  🚛
+</h2>
 
         <div className="space-y-2 mb-3">
           {loading ? (
@@ -128,11 +138,11 @@ export default function TrucksManager({ onClose }: TrucksManagerProps) {
     className="relative w-full h-[46px] rounded-[18px] bg-white flex items-center justify-center"
   >
  <div className="relative w-full text-center">
-  <span>{truck.reg}</span>
+<span>{truck.reg}</span>
 
-  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] text-zinc-400">
-    8.3 MPG
-  </span>
+<span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] text-zinc-400">
+  {dieselStats?.[truck.reg]?.mpg?.toFixed(1) ?? "-"} MPG
+</span>
 </div>
   </button>
 ))

@@ -550,9 +550,10 @@ Add Driver
 )}
 
 {showTrucks && (
-  <TrucksManager
-    onClose={() => setShowTrucks(false)}
-  />
+<TrucksManager
+  onClose={() => setShowTrucks(false)}
+  dieselStats={dieselStats}
+/>
 )}
 
       {showAddDriver && (
