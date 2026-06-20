@@ -458,7 +458,7 @@ setShowAddDriver(false)
       <div
         key={`${driver.id}-${refreshKey}`}
         onClick={() => onOpenDriver(driver)}
-className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] transition-all ${
+className={`relative rounded-[18px] border border-green-400 p-3 pb-6 ...
   isActive ? "bg-[#f5f5f5]" : "bg-[#f5f5f5] opacity-70"
 }`}
       >
@@ -498,34 +498,19 @@ className={`rounded-[18px] border border-green-400 p-3 active:scale-[0.99] trans
   </div>
 </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              openEditDriver(driver)
-            }}
-            className="flex-1 h-[34px] rounded-[14px] bg-blue-500 text-white text-[14px] font-bold"
-          >
-            Edit
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleDriverActive(driver)
-            }}
-            className={`flex-1 h-[34px] rounded-[14px] text-white text-[14px] font-bold ${
-              isActive ? "bg-zinc-500" : "bg-green-500"
-            }`}
-          >
-            {isActive ? "Disable" : "Enable"}
-          </button>
-        </div>
+<button
+  onClick={(e) => {
+    e.stopPropagation()
+    openEditDriver(driver)
+  }}
+className="absolute bottom-1.5 right-2 text-[22px] text-blue-500 leading-none"
+>
+  ✎
+ 
+</button>
       </div>
     )
   })}
-
-
 </div>
 
   {showBossMenu && (
