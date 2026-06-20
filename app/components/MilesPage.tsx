@@ -475,11 +475,30 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
 
   const archiveTitles = Object.keys(archiveWeeks)
 
+const isArchiveList = archiveOpen && !activeArchiveWeek
+
   const visibleArchiveEntries = activeArchiveWeek
+
+
     ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
         a.entry_date.localeCompare(b.entry_date)
       )
     : []
+
+    const isArchiveMode = !!activeArchiveWeek
+
+const visibleEntries = isArchiveMode
+  ? visibleArchiveEntries
+  : currentWeekEntries
+
+const visibleTitle = isArchiveMode
+  ? activeArchiveWeek
+  : "Miles"
+
+const visibleTotal = visibleEntries.reduce(
+  (sum, entry) => sum + (entry.total_miles ?? 0),
+  0
+)
 
   const renderFuel = (entry: MileageEntry) => {
     const fuel = Number(entry.estimated_litres)
@@ -496,17 +515,27 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
+   <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
       <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={onBack}
-          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-        >
-          Back
-        </button>
+     <button
+ onClick={() => {
+  if (activeArchiveWeek) {
+    setActiveArchiveWeek(null)
+  } else if (archiveOpen) {
+    setArchiveOpen(false)
+  } else {
+    onBack()
+  }
+}}
+  className="w-[30px] text-[34px] text-blue-500 leading-none"
+>
+  ‹
+</button>
 
         <div className="flex-1 text-center">
-          <div className="text-[22px] font-bold">Miles</div>
+         <div className="text-[22px] font-bold">
+  {archiveOpen ? "Miles Archive" : "Miles"}
+</div>
 
           <div className="text-[14px]">
             <span className="text-zinc-500">This week</span>{" "}
@@ -515,52 +544,84 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            setArchiveOpen(true)
-            setActiveArchiveWeek(null)
-          }}
-          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-        >
-          Archive
-        </button>
+{!archiveOpen && (
+  <button
+    onClick={() => {
+      setArchiveOpen(true)
+      setActiveArchiveWeek(null)
+    }}
+    className="w-[30px] text-[28px] leading-none"
+  >
+    📁
+  </button>
+)}
       </div>
 
       <div className="mt-5 space-y-3">
-        {currentWeekEntries.map((entry) => (
+
+{isArchiveList &&
+  archiveTitles.map((title) => {
+    const total = archiveWeeks[title].reduce(
+      (sum, entry) => sum + (entry.total_miles ?? 0),
+      0
+    )
+
+    return (
+      <button
+        key={title}
+        onClick={() => setActiveArchiveWeek(title)}
+        className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
+      >
+        <div className="font-bold">{title}</div>
+        <div className="text-[14px] text-zinc-500">
+          {archiveWeeks[title].length} entries · {total} miles
+        </div>
+      </button>
+    )
+  })}
+
+      {!isArchiveList &&
+  visibleEntries.map((entry) => (
           <button
             key={entry.id}
             onClick={() => openEdit(entry)}
-            className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
+           className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-2 shadow-sm"
           >
-            <div>
-              <div className="relative text-center mb-1">
-                <div>{displayDate(entry.entry_date)}</div>
+            
+             <div>
+ <div className="relative text-center mb-3">
+  <div className="font-semibold">
+    {displayDate(entry.entry_date)}
+  </div>
 
-                <div className="absolute right-0 top-0 font-semibold">
-                  {entry.reg_number ?? assignedReg}
-                </div>
-              </div>
+  <div className="absolute right-0 top-0 font-semibold">
+    {entry.reg_number ?? assignedReg}
+  </div>
+</div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-zinc-500">Start:</span>{" "}
-                  <b>{entry.start_mileage}</b>
-                  {" - "}
-                  <span className="text-zinc-500">Finish:</span>{" "}
-                  <b>{entry.finish_mileage ?? "-"}</b>
-                </div>
+  <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-1">
+      <div>
+        <span className="text-zinc-500">Start:</span>{" "}
+        <b>{entry.start_mileage}</b>
+      </div>
 
-                <div className="text-right">
-                  <div>
-                    <span className="text-zinc-500">Total:</span>{" "}
-                    <b>{entry.total_miles ?? "--"}</b> miles
-                  </div>
+      <div>
+        <span className="text-zinc-500">Finish:</span>{" "}
+        <b>{entry.finish_mileage ?? "-"}</b>
+      </div>
+    </div>
 
-                  {renderFuel(entry)}
-                </div>
-              </div>
-            </div>
+    <div className="space-y-1 text-right">
+      <div>
+        <span className="text-zinc-500">Total:</span>{" "}
+        <b>{entry.total_miles ?? "--"}</b> miles
+      </div>
+
+      {renderFuel(entry)}
+    </div>
+  </div>
+</div>
           </button>
         ))}
       </div>
@@ -738,104 +799,6 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {archiveOpen && (
-        <div
-          onClick={() => setArchiveOpen(false)}
-          className="fixed inset-0 z-[105] bg-[#efeff4]"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => {
-                  if (activeArchiveWeek) {
-                    setActiveArchiveWeek(null)
-                  } else {
-                    setArchiveOpen(false)
-                  }
-                }}
-                className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
-              >
-                Back
-              </button>
-
-              <h2 className="text-[22px] font-bold">
-                {activeArchiveWeek ? activeArchiveWeek : "Miles Archive"}
-              </h2>
-
-              <div className="w-[70px]" />
-            </div>
-
-            {!activeArchiveWeek && (
-              <div className="space-y-2">
-                {archiveTitles.length === 0 && (
-                  <div className="text-zinc-500">No archived weeks yet</div>
-                )}
-
-                {archiveTitles.map((title) => {
-                  const total = archiveWeeks[title].reduce(
-                    (sum, entry) => sum + (entry.total_miles ?? 0),
-                    0
-                  )
-
-                  return (
-                    <button
-                      key={title}
-                      onClick={() => setActiveArchiveWeek(title)}
-                      className="w-full bg-zinc-100 rounded-[14px] p-3 text-left"
-                    >
-                      <div className="font-bold">{title}</div>
-                      <div className="text-[14px]">
-                        {archiveWeeks[title].length} entries · {total} miles
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {activeArchiveWeek && (
-              <div className="space-y-3">
-                <button
-                  onClick={() => setActiveArchiveWeek(null)}
-                  className="h-[38px] px-4 rounded-[12px] bg-zinc-200 font-bold mb-2"
-                >
-                  Back to weeks
-                </button>
-
-                {visibleArchiveEntries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => {
-                      setArchiveOpen(false)
-                      openEdit(entry)
-                    }}
-                    className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
-                  >
-                    <div>
-                      <div>{displayDate(entry.entry_date)}</div>
-
-                      <div className="text-center">
-                        Start: <b>{entry.start_mileage}</b> - Finish:{" "}
-                        <b>{entry.finish_mileage ?? "-"}</b>
-                      </div>
-
-                      <div className="text-right font-bold">
-                        Total: {entry.total_miles ?? "-"} miles
-                      </div>
-
-                      <div className="text-right">{renderFuel(entry)}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
