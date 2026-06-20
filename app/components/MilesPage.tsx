@@ -571,7 +571,7 @@ const visibleTotal = visibleEntries.reduce(
       <button
         key={title}
         onClick={() => setActiveArchiveWeek(title)}
-        className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
+        className="w-full text-center bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
       >
         <div className="font-bold">{title}</div>
         <div className="text-[14px] text-zinc-500">
@@ -627,14 +627,16 @@ const visibleTotal = visibleEntries.reduce(
         ))}
       </div>
 
-   <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
-        <button
-          onClick={openAdd}
-          className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
-        >
-          + Add Mileage
-        </button>
-      </div>
+  {!archiveOpen && (
+  <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
+    <button
+      onClick={openAdd}
+      className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
+    >
+      + Add Mileage
+    </button>
+  </div>
+)}
 
       {addOpen && (
         <div

@@ -1088,6 +1088,8 @@ export default function DieselPage({
 
   const archiveTitles = Object.keys(archiveWeeks)
 
+  const isArchiveList = archiveOpen && !activeArchiveWeek
+
   const visibleArchiveEntries = activeArchiveWeek
     ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) => {
         const timeDiff = getEntryTime(a) - getEntryTime(b)
@@ -1096,36 +1098,92 @@ export default function DieselPage({
       })
     : []
 
+    const isArchiveMode = !!activeArchiveWeek
+
+const visibleEntries = isArchiveMode
+  ? visibleArchiveEntries
+  : currentWeekEntries
+
+  const visibleLitres = visibleEntries.reduce(
+  (sum, entry) => sum + (entry.litres ?? 0),
+  0
+)
+
   return (
-    <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
+    <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
       <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={onBack}
-          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-        >
-          Back
-        </button>
+      <button
+  onClick={() => {
+    if (activeArchiveWeek) {
+      setActiveArchiveWeek(null)
+    } else if (archiveOpen) {
+      setArchiveOpen(false)
+    } else {
+      onBack()
+    }
+  }}
+  className="w-[30px] text-[34px] text-blue-500 leading-none"
+>
+  ‹
+</button>
 
         <div className="flex-1 text-center">
-          <div className="text-[22px] font-bold">Diesel</div>
-          <div className="text-[14px] font-bold">
-            This week {weekLitres.toFixed(2)} L
-          </div>
+         <div className="text-[22px] font-bold">
+  {archiveOpen ? "Diesel Archive" : "Diesel"}
+</div>
+      <div className="text-[14px] font-bold">
+  {isArchiveMode
+    ? `${visibleLitres.toFixed(2)} L`
+    : `This week ${weekLitres.toFixed(2)} L`}
+</div>
         </div>
 
-        <button
-          onClick={() => {
-            setArchiveOpen(true)
-            setActiveArchiveWeek(null)
-          }}
-          className="h-[42px] px-4 rounded-[14px] bg-white font-bold text-[15px]"
-        >
-          Archive
-        </button>
+        
+{!archiveOpen ? (
+  <button
+    onClick={() => {
+      setArchiveOpen(true)
+      setActiveArchiveWeek(null)
+    }}
+     className="w-[30px] text-[28px] leading-none"
+  >
+    📁
+  </button>
+) : (
+  <div className="w-[70px]" />
+)}
+
+
       </div>
 
-      <div className="mt-5 space-y-3">
-        {currentWeekEntries.map((entry) => {
+
+
+
+
+<div className="mt-5 space-y-3">
+  {isArchiveList &&
+    archiveTitles.map((title) => {
+      const total = archiveWeeks[title].reduce(
+        (sum, entry) => sum + (entry.litres ?? 0),
+        0
+      )
+
+      return (
+        <button
+          key={title}
+          onClick={() => setActiveArchiveWeek(title)}
+          className="w-full text-center bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
+        >
+          <div className="font-bold">{title}</div>
+          <div className="text-[14px] text-zinc-500">
+            {archiveWeeks[title].length} entries · {total.toFixed(2)} L
+          </div>
+        </button>
+      )
+    })}
+
+  {!isArchiveList &&
+    visibleEntries.map((entry) => {
           const entryPhotos = getEntryPhotos(entry.id)
           const previousEntry = findPreviousEntryForSameTruck(entry)
           const average = getDieselAverageFromPrevious(entry, previousEntry)
@@ -1134,7 +1192,7 @@ export default function DieselPage({
             <button
               key={entry.id}
               onClick={() => openEdit(entry)}
-              className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
+            className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-2 shadow-sm"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="pl-2">
@@ -1203,20 +1261,22 @@ export default function DieselPage({
         })}
       </div>
 
-      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
-        <button
-          onClick={() => {
-            setMileage("")
-            setLitres("")
-            setRegNumber(assignedReg)
-            clearPhotos()
-            setAddOpen(true)
-          }}
-          className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
-        >
-          + Fill Up Diesel
-        </button>
-      </div>
+    {!archiveOpen && (
+  <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
+    <button
+      onClick={() => {
+        setMileage("")
+        setLitres("")
+        setRegNumber(assignedReg)
+        clearPhotos()
+        setAddOpen(true)
+      }}
+      className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
+    >
+      + Fill Up Diesel
+    </button>
+  </div>
+)}
 
       {addOpen && (
         <div
@@ -1470,149 +1530,7 @@ export default function DieselPage({
         </div>
       )}
 
-      {archiveOpen && (
-        <div
-          onClick={() => setArchiveOpen(false)}
-          className="fixed inset-0 z-[105] bg-[#efeff4]"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full h-full overflow-y-auto bg-[#efeff4] p-4"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => {
-                  if (activeArchiveWeek) {
-                    setActiveArchiveWeek(null)
-                  } else {
-                    setArchiveOpen(false)
-                  }
-                }}
-                className="h-[40px] px-4 rounded-[14px] bg-white text-black text-[16px] font-bold"
-              >
-                Back
-              </button>
-
-              <h2 className="text-[22px] font-bold">
-                {activeArchiveWeek ? activeArchiveWeek : "Diesel Archive"}
-              </h2>
-
-              <div className="w-[70px]" />
-            </div>
-
-            {!activeArchiveWeek && (
-              <div className="space-y-2">
-                {archiveTitles.length === 0 && (
-                  <div className="text-zinc-500">No archived weeks yet</div>
-                )}
-
-                {archiveTitles.map((title) => {
-                  const total = archiveWeeks[title].reduce(
-                    (sum, entry) => sum + (entry.litres ?? 0),
-                    0
-                  )
-
-                  return (
-                    <button
-                      key={title}
-                      onClick={() => setActiveArchiveWeek(title)}
-                      className="w-full bg-zinc-100 rounded-[14px] p-3 text-left"
-                    >
-                      <div className="font-bold">{title}</div>
-                      <div className="text-[14px]">
-                        {archiveWeeks[title].length} entries ·{" "}
-                        {total.toFixed(2)} L
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {activeArchiveWeek && (
-              <div className="space-y-3">
-                {visibleArchiveEntries.map((entry) => {
-                  const entryPhotos = getEntryPhotos(entry.id)
-                  const previousEntry = findPreviousEntryForSameTruck(entry)
-                  const average = getDieselAverageFromPrevious(
-                    entry,
-                    previousEntry
-                  )
-
-                  return (
-                    <button
-                      key={entry.id}
-                      onClick={() => {
-                        setArchiveOpen(false)
-                        openEdit(entry)
-                      }}
-                      className="w-full text-left bg-white rounded-[18px] px-3 py-2 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="pl-2">
-                          <div className="flex gap-2">
-                            <span>{displayDate(entry.entry_date)}</span>
-                            <b>{entry.reg_number ?? assignedReg}</b>
-                          </div>
-
-                          <div>
-                            Mileage: <b>{entry.mileage ?? "-"}</b>
-                          </div>
-
-                          <div>
-                            Litres:{" "}
-                            <b>
-                              {entry.litres === null
-                                ? "-"
-                                : `${Number(entry.litres).toFixed(2)} L`}
-                            </b>
-                          </div>
-
-                          {isBoss && average !== null && (
-                            <>
-                              <div>
-                                Distance: <b>{average.miles}</b> miles
-                              </div>
-
-                              <div>
-                                MPG: <b>{average.mpg.toFixed(1)}</b>
-                              </div>
-
-                              <div>
-                                L/100km:{" "}
-                                <b>{average.litresPer100km.toFixed(1)}</b>
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {entryPhotos.length > 0 && (
-                          <div className="flex gap-1 shrink-0">
-                            {entryPhotos.slice(0, 3).map((photo) => (
-                              <img
-                                key={photo.id}
-                                src={photo.photo_url}
-                                alt="Diesel receipt"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenPhoto(photo.photo_url)
-                                }}
-                                className="h-[46px] w-[46px] rounded-[9px] object-cover"
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {openPhoto && (
+       {openPhoto && (
         <div
           onClick={() => setOpenPhoto(null)}
           className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4"
