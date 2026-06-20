@@ -431,7 +431,7 @@ setShowAddDriver(false)
 <div className="relative bg-white px-4 pt-4 h-[80px] flex items-center justify-between">
         <button
           onClick={onLogout}
-          className="text-blue-500 text-[17px] font-bold"
+          className="text-blue-500 text-[17px] font-reular"
         >
           Logout
         </button>
@@ -443,7 +443,7 @@ setShowAddDriver(false)
 />
 <button
   onClick={() => setShowBossMenu(true)}
-  className="text-blue-500 text-[28px] font-black leading-none"
+  className="text-blue-500 text-[28px]  leading-none"
 >
   ☰
 </button>

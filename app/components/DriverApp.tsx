@@ -1027,7 +1027,7 @@ setNewEntry({
   onClick={handleBackButton}
 className={
   screen === "main" && !isBoss
-    ? "text-blue-500 text-[17px] font-bold"
+    ? "text-blue-500 text-[17px] font-regular"
     : "w-[30px] text-[34px] text-blue-500 leading-none"
 }
 >
@@ -1069,7 +1069,7 @@ className={
    {screen === "main" ? (
       <button
         onClick={() => setShowMainMenu(true)}
-        className="text-[30px] text-blue-500"
+       className="text-blue-500 text-[28px] leading-none"
       >
         ☰
       </button>
