@@ -515,7 +515,8 @@ const visibleTotal = visibleEntries.reduce(
   }
 
   return (
-<div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
+<div className="fixed inset-0 z-[80] bg-white overflow-y-auto pb-[80px]">
+ 
       <div className="flex items-center gap-2 mb-3">
      <button
  onClick={() => {
@@ -626,7 +627,7 @@ const visibleTotal = visibleEntries.reduce(
         ))}
       </div>
 
-      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-[#efeff4]/95 backdrop-blur p-3">
+      <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
         <button
           onClick={openAdd}
           className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
