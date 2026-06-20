@@ -515,7 +515,7 @@ const visibleTotal = visibleEntries.reduce(
   }
 
   return (
-   <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
+  <div className="fixed inset-0 z-[80] bg-[#efeff4] p-3 overflow-y-auto pb-[80px]">
       <div className="flex items-center gap-2 mb-3">
      <button
  onClick={() => {
