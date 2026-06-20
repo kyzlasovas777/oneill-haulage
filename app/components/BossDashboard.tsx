@@ -558,9 +558,33 @@ Add Driver
       {showAddDriver && (
         <div className="fixed inset-0 bg-black/20 z-[90] flex items-end justify-center">
           <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
-            <h2 className="text-center text-[24px] font-bold text-black mb-5">
-              {editingDriverId ? "Edit Driver" : "Add Driver"}
-            </h2>
+           <div className="flex items-center justify-between mb-5">
+  <div className="w-[70px]" />
+
+  <h2 className="text-[24px] font-bold text-black">
+    {editingDriverId ? "Edit Driver" : "Add Driver"}
+  </h2>
+
+{editingDriverId ? (
+  <button
+   onClick={() => {
+  const driver = drivers.find((d) => d.id === editingDriverId)
+  if (driver) toggleDriverActive(driver)
+}}
+    className={`w-[70px] text-right text-[15px] font-semibold ${
+      drivers.find((d) => d.id === editingDriverId)?.active === false
+        ? "text-green-500"
+        : "text-red-500"
+    }`}
+  >
+    {drivers.find((d) => d.id === editingDriverId)?.active === false
+      ? "Enable"
+      : "Disable"}
+  </button>
+) : (
+  <div className="w-[70px]" />
+)}
+</div>
 
             <input
               placeholder="Driver name"
