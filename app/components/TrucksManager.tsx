@@ -121,15 +121,21 @@ export default function TrucksManager({ onClose }: TrucksManagerProps) {
               No trucks yet
             </p>
           ) : (
-            trucks.map((truck) => (
-              <button
-                key={truck.id}
-                onClick={() => setSelectedTruck(truck)}
-                className="w-full h-[46px] rounded-[18px] bg-white flex items-center justify-center text-[17px] font-bold text-black active:scale-[0.98]"
-              >
-                {truck.reg}
-              </button>
-            ))
+        trucks.map((truck) => (
+  <button
+    key={truck.id}
+    onClick={() => setSelectedTruck(truck)}
+    className="relative w-full h-[46px] rounded-[18px] bg-white flex items-center justify-center"
+  >
+ <div className="relative w-full text-center">
+  <span>{truck.reg}</span>
+
+  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] text-zinc-400">
+    8.3 MPG
+  </span>
+</div>
+  </button>
+))
           )}
         </div>
 
