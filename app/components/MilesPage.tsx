@@ -627,7 +627,7 @@ const visibleTotal = visibleEntries.reduce(
         ))}
       </div>
 
-     <div className="sticky bottom-0 bg-white pt-3">
+   <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
         <button
           onClick={openAdd}
           className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
