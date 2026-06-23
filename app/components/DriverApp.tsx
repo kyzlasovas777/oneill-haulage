@@ -5,6 +5,7 @@ import { supabase } from "./supabase"
 import MilesPage from "./MilesPage"
 import DieselPage from "./DieselPage"
 import * as XLSX from "xlsx"
+import { startOneillGlobalSync } from "./oneillGlobalSync"
 
 type Entry = {
   id: number
@@ -208,6 +209,10 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
   const [syncing, setSyncing] = useState(false)
   const [driverTruck, setDriverTruck] = useState("")
 const [trucks, setTrucks] = useState<string[]>([])
+
+useEffect(() => {
+  startOneillGlobalSync(driverId)
+}, [driverId])
 
 
   useEffect(() => {

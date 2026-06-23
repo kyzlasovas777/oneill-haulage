@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
+import { triggerOneillGlobalSync } from "./oneillGlobalSync"
 
 type MilesPageProps = {
   driverId: number
@@ -19,6 +20,7 @@ type MileageEntry = {
   avg_l100: number | null
   estimated_litres: number | null
   created_at?: string
+  syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
 type Truck = {
@@ -92,8 +94,27 @@ function normaliseReg(reg: string | null | undefined) {
   return (reg ?? "").trim().toUpperCase()
 }
 
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback
+
+  try {
+    const saved = localStorage.getItem(key)
+    return saved ? JSON.parse(saved) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function isLocalId(id: number) {
+  return id > 1000000000000
+}
+
 export default function MilesPage({ driverId, onBack }: MilesPageProps) {
-  const [entries, setEntries] = useState<MileageEntry[]>([])
+  const mileageStorageKey = `oneill-mileage-entries-${driverId}`
+
+const [entries, setEntries] = useState<MileageEntry[]>(() =>
+  loadFromStorage<MileageEntry[]>(mileageStorageKey, [])
+)
   const [trucks, setTrucks] = useState<Truck[]>([])
   const [assignedReg, setAssignedReg] = useState("")
 
@@ -121,21 +142,50 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
   const needsFinish = todayEntry && todayEntry.finish_mileage === null
   const todayCompleted = todayEntry && todayEntry.finish_mileage !== null
 
-  const loadMileageEntries = async () => {
-    const { data, error } = await supabase
-      .from("mileage_entries")
-      .select("*")
-      .eq("driver_id", driverId)
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false })
+ const loadMileageEntries = async () => {
+  if (!navigator.onLine) return
 
-    if (error) {
-      console.log("MILEAGE LOAD ERROR:", error)
-      return
-    }
+  const { data, error } = await supabase
+    .from("mileage_entries")
+    .select("*")
+    .eq("driver_id", driverId)
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false })
 
-    setEntries(data ?? [])
+  if (error) {
+    console.log("MILEAGE LOAD ERROR:", error)
+    return
   }
+
+  const localEntries = loadFromStorage<MileageEntry[]>(mileageStorageKey, [])
+
+  const localPending = localEntries.filter(
+    (entry) =>
+      entry.syncStatus === "pending" ||
+      entry.syncStatus === "delete_pending"
+  )
+
+  const deletedIds = localPending
+    .filter((entry) => entry.syncStatus === "delete_pending")
+    .map((entry) => entry.id)
+
+  const remoteRows: MileageEntry[] = (data ?? []).map((entry) => ({
+    ...entry,
+    syncStatus: "synced",
+  }))
+
+  const mergedRows = [
+    ...remoteRows.filter(
+      (entry) =>
+        !deletedIds.includes(entry.id) &&
+        !localPending.some((local) => local.id === entry.id)
+    ),
+    ...localPending,
+  ]
+
+  setEntries(mergedRows)
+  localStorage.setItem(mileageStorageKey, JSON.stringify(mergedRows))
+}
 
   const loadTrucks = async () => {
     const { data, error } = await supabase
@@ -216,6 +266,10 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     loadAssignedTruck()
   }, [driverId])
 
+  useEffect(() => {
+  localStorage.setItem(mileageStorageKey, JSON.stringify(entries))
+}, [entries, mileageStorageKey])
+
   const openEdit = (entry: MileageEntry) => {
     setEditingEntry(entry)
     setEditStartMileage(String(entry.start_mileage))
@@ -252,51 +306,47 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
     setRegNumber("")
   }
 
-  const saveStartMileage = async () => {
-    if (saving) return
+const saveStartMileage = async () => {
+  if (saving) return
 
-    const start = Number(startMileage)
-    const mileageReg = normaliseReg(regNumber || assignedReg)
+  const start = Number(startMileage)
+  const mileageReg = normaliseReg(regNumber || assignedReg)
 
-    if (!startMileage) {
-      alert("Enter start mileage")
-      return
-    }
-
-    if (start <= 0) {
-      alert("Start mileage must be higher than 0")
-      return
-    }
-
-    setSaving(true)
-
-    const { data, error } = await supabase
-      .from("mileage_entries")
-      .insert({
-        driver_id: driverId,
-        entry_date: today,
-        start_mileage: start,
-        finish_mileage: null,
-        total_miles: null,
-        reg_number: mileageReg || null,
-        avg_l100: null,
-        estimated_litres: null,
-      })
-      .select()
-      .single()
-
-    setSaving(false)
-
-    if (error) {
-      console.log("MILEAGE START SAVE ERROR:", error)
-      alert("Mileage save error")
-      return
-    }
-
-    if (data) setEntries((prev) => [data, ...prev])
-
-    closeAdd()
+  if (!startMileage) {
+    alert("Enter start mileage")
+    return
   }
+
+  if (start <= 0) {
+    alert("Start mileage must be higher than 0")
+    return
+  }
+
+  setSaving(true)
+
+  const localEntry: MileageEntry = {
+    id: Date.now(),
+    driver_id: driverId,
+    entry_date: today,
+    start_mileage: start,
+    finish_mileage: null,
+    total_miles: null,
+    reg_number: mileageReg || null,
+    avg_l100: null,
+    estimated_litres: null,
+    created_at: new Date().toISOString(),
+    syncStatus: "pending",
+  }
+
+  setEntries((prev) => [localEntry, ...prev])
+
+  setSaving(false)
+  closeAdd()
+
+  if (navigator.onLine) {
+    triggerOneillGlobalSync(driverId)
+  }
+}
 
   const saveFinishMileage = async () => {
     if (saving || !todayEntry) return
@@ -404,57 +454,57 @@ export default function MilesPage({ driverId, onBack }: MilesPageProps) {
           ? Number(((total * 1.60934 * avgL100) / 100).toFixed(1))
           : null
     }
+  
+  
+ setEditingSaving(true)
 
-    setEditingSaving(true)
+const updatedEntry: MileageEntry = {
+  ...editingEntry,
+  start_mileage: start,
+  finish_mileage: finish,
+  total_miles: total,
+  reg_number: mileageReg || null,
+  avg_l100: avgL100,
+  estimated_litres: estimatedLitres,
+  syncStatus: "pending",
+}
 
-    const { data, error } = await supabase
-      .from("mileage_entries")
-      .update({
-        start_mileage: start,
-        finish_mileage: finish,
-        total_miles: total,
-        reg_number: mileageReg || null,
-        avg_l100: avgL100,
-        estimated_litres: estimatedLitres,
-      })
-      .eq("id", editingEntry.id)
-      .select()
-      .single()
+setEntries((prev) =>
+  prev.map((entry) =>
+    entry.id === editingEntry.id ? updatedEntry : entry
+  )
+)
 
-    setEditingSaving(false)
+setEditingSaving(false)
 
-    if (error) {
-      console.log("MILEAGE EDIT SAVE ERROR:", error)
-      alert("Mileage edit error")
-      return
-    }
+closeEdit()
 
-    if (data) {
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === data.id ? data : entry))
-      )
-    }
-
-    closeEdit()
+if (navigator.onLine) {
+  triggerOneillGlobalSync(driverId)
+}
   }
+ const deleteMileageEntry = async (id: number) => {
+  if (!confirm("Delete this mileage entry?")) return
 
-  const deleteMileageEntry = async (id: number) => {
-    if (!confirm("Delete this mileage entry?")) return
+  const entryToDelete = entries.find((entry) => entry.id === id)
 
-    const { error } = await supabase
-      .from("mileage_entries")
-      .delete()
-      .eq("id", id)
+  const nextEntries =
+    entryToDelete?.syncStatus === "pending" && isLocalId(id)
+      ? entries.filter((entry) => entry.id !== id)
+      : entries.map((entry) =>
+          entry.id === id
+            ? { ...entry, syncStatus: "delete_pending" as const }
+            : entry
+        )
 
-    if (error) {
-      alert("Delete failed")
-      return
-    }
+  setEntries(nextEntries)
 
-    setEntries((prev) => prev.filter((entry) => entry.id !== id))
-    closeEdit()
+  closeEdit()
+
+  if (navigator.onLine) {
+    triggerOneillGlobalSync(driverId)
   }
-
+}
   const currentWeekEntries = entries
     .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
@@ -622,6 +672,15 @@ const visibleTotal = visibleEntries.reduce(
       </div>
 
       {renderFuel(entry)}
+
+<div className="text-[11px] text-zinc-500 mt-1">
+  {entry.syncStatus === "pending"
+    ? "⌛ Waiting sync"
+    : entry.syncStatus === "synced"
+    ? "✔ Synced"
+    : ""}
+</div>
+
     </div>
   </div>
 </div>

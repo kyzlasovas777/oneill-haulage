@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
+import { triggerOneillGlobalSync } from "./oneillGlobalSync"
 
 type DieselPageProps = {
   driverId: number
@@ -677,13 +678,13 @@ export default function DieselPage({
     loadTrucks()
     loadAssignedTruck()
 
-    setTimeout(() => {
-      if (navigator.onLine) syncDieselEntries()
-    }, 300)
+ setTimeout(() => {
+  if (navigator.onLine) triggerOneillGlobalSync(driverId)
+}, 300)
 
-    const handleOnline = () => {
-      syncDieselEntries()
-    }
+  const handleOnline = () => {
+  triggerOneillGlobalSync(driverId)
+}
 
     window.addEventListener("online", handleOnline)
 
@@ -896,9 +897,9 @@ export default function DieselPage({
           localStorage.setItem(dieselPhotosStorageKey, JSON.stringify(nextPhotos))
         }
 
-        if (navigator.onLine) {
-          await syncDieselEntries()
-        }
+    if (navigator.onLine) {
+  triggerOneillGlobalSync(driverId)
+}
       } catch (error) {
         console.log("DIESEL BACKGROUND PHOTO SAVE ERROR:", error)
       }
@@ -988,9 +989,9 @@ export default function DieselPage({
           localStorage.setItem(dieselPhotosStorageKey, JSON.stringify(nextPhotos))
         }
 
-        if (navigator.onLine) {
-          await syncDieselEntries()
-        }
+    if (navigator.onLine) {
+  triggerOneillGlobalSync(driverId)
+}
       } catch (error) {
         console.log("DIESEL EDIT BACKGROUND PHOTO SAVE ERROR:", error)
       }
@@ -1010,9 +1011,9 @@ export default function DieselPage({
       localStorage.setItem(dieselPhotoDeletesStorageKey, JSON.stringify(nextDeletes))
     }
 
-    setTimeout(() => {
-      if (navigator.onLine) syncDieselEntries()
-    }, 300)
+ setTimeout(() => {
+  if (navigator.onLine) triggerOneillGlobalSync(driverId)
+}, 300)
   }
 
   const deleteDieselEntry = async (id: number) => {
@@ -1051,9 +1052,9 @@ export default function DieselPage({
 
     closeEdit()
 
-    setTimeout(() => {
-      if (navigator.onLine) syncDieselEntries()
-    }, 300)
+  setTimeout(() => {
+  if (navigator.onLine) triggerOneillGlobalSync(driverId)
+}, 300)
   }
 
   const currentWeekEntries = entries
