@@ -21,6 +21,8 @@ type Entry = {
   to: string
   status: string
   note: string
+  regNumber?: string
+  syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
 type DieselEntry = {
@@ -164,6 +166,86 @@ const loadDieselStats = async () => {
 
   setDieselStats(nextStats)
 }
+
+const formatEntryDate = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}.${month}.${day}`
+}
+
+const getWeekStart = (date: Date) => {
+  const d = new Date(date)
+  const day = d.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+
+  d.setDate(d.getDate() + mondayOffset)
+  d.setHours(0, 0, 0, 0)
+
+  return d
+}
+
+const syncAllDriversCurrentWeekEntries = async () => {
+  if (!navigator.onLine) return
+
+  const monday = getWeekStart(new Date())
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  const weekStart = formatEntryDate(monday)
+  const weekEnd = formatEntryDate(sunday)
+
+  const { data, error } = await supabase
+    .from("entries")
+    .select("*")
+    .gte("entry_date", weekStart)
+    .lte("entry_date", weekEnd)
+
+  if (error) {
+    console.log("BOSS WEEK ENTRIES LOAD ERROR:", error)
+    return
+  }
+
+  const grouped: Record<number, Entry[]> = {}
+
+  ;(data ?? []).forEach((row) => {
+    const driverId = row.driver_id
+    if (!grouped[driverId]) grouped[driverId] = []
+
+    grouped[driverId].push({
+      id: row.id,
+      date: row.entry_date,
+      trailer: row.trailer ?? "",
+      from: row.from_place ?? "",
+      to: row.to_place ?? "",
+      status: row.status ?? "",
+      note: row.note ?? "",
+      regNumber: row.reg_number ?? "",
+      syncStatus: "synced",
+    })
+  })
+
+  drivers.forEach((driver) => {
+    const key = `oneill-entries-${driver.id}`
+
+    const localSaved = localStorage.getItem(key)
+    const localEntries: Entry[] = localSaved ? JSON.parse(localSaved) : []
+
+    const localPending = localEntries.filter(
+      (entry) =>
+        entry.syncStatus === "pending" ||
+        entry.syncStatus === "delete_pending"
+    )
+
+    const rows = [...(grouped[driver.id] ?? []), ...localPending]
+
+    localStorage.setItem(key, JSON.stringify(rows))
+  })
+
+  setRefreshKey((prev) => prev + 1)
+}
+
+
   const [syncText, setSyncText] = useState("Offline ready")
   const [syncing, setSyncing] = useState(false)
 
@@ -308,9 +390,10 @@ const loadDieselStats = async () => {
   }
 
 useEffect(() => {
-  loadFromSupabase()
-  loadTrucks()
-  loadDieselStats()
+loadFromSupabase()
+loadTrucks()
+loadDieselStats()
+syncAllDriversCurrentWeekEntries()
 
     const handleOnline = () => {
       syncDrivers()
