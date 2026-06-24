@@ -686,11 +686,15 @@ const visibleTotal = visibleEntries.reduce(
 
       {renderFuel(entry)}
 
-<div className="text-[11px] text-zinc-500 mt-1">
+<div className="text-[11px] text-zinc-500 mt-1 text-right">
   {entry.syncStatus === "pending"
-    ? "⌛ Waiting sync"
+    ? "⏳ Waiting sync"
     : entry.syncStatus === "synced"
-    ? "✔ Synced"
+    ? (
+      <>
+        <span className="text-green-600 font-bold">&#10003;</span> Synced
+      </>
+    )
     : ""}
 </div>
 

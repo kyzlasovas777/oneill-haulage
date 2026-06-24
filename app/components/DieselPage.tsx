@@ -693,6 +693,30 @@ export default function DieselPage({
     }
   }, [])
 
+  useEffect(() => {
+  const handleDieselSynced = () => {
+    const latestEntries = loadFromStorage<DieselEntry[]>(
+      dieselEntriesStorageKey,
+      []
+    )
+
+    const latestPhotos = loadFromStorage<DieselPhoto[]>(
+      dieselPhotosStorageKey,
+      []
+    )
+
+    setEntries(latestEntries)
+    setAllDieselEntries(latestEntries)
+    setPhotos(latestPhotos)
+  }
+
+  window.addEventListener("oneill-diesel-synced", handleDieselSynced)
+
+  return () => {
+    window.removeEventListener("oneill-diesel-synced", handleDieselSynced)
+  }
+}, [dieselEntriesStorageKey, dieselPhotosStorageKey])
+
   const findPreviousEntryForSameTruck = (current: DieselEntry) => {
     const currentReg = normalizeReg(current.reg_number)
     const currentTime = getEntryTime(current)
@@ -1215,13 +1239,7 @@ const visibleEntries = isArchiveMode
                     </b>
                   </div>
 
-                  <div className="text-[11px]">
-                    {entry.syncStatus === "pending"
-                      ? "⌛ Waiting sync"
-                      : entry.syncStatus === "synced"
-                      ? "✔ Synced"
-                      : ""}
-                  </div>
+               
 
                   {isBoss && average !== null && (
                     <>
@@ -1236,6 +1254,19 @@ const visibleEntries = isArchiveMode
                       <div>
                         L/100km: <b>{average.litresPer100km.toFixed(1)}</b>
                       </div>
+
+<div className="text-[11px] text-zinc-500 mt-1 text-left">
+  {entry.syncStatus === "pending"
+    ? "⏳ Waiting sync"
+    : entry.syncStatus === "synced"
+    ? (
+      <>
+        <span className="text-green-600 font-bold">&#10003;</span> Synced
+      </>
+    )
+    : ""}
+</div>
+
                     </>
                   )}
                 </div>
