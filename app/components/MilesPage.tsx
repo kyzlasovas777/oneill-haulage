@@ -270,6 +270,19 @@ const [entries, setEntries] = useState<MileageEntry[]>(() =>
   localStorage.setItem(mileageStorageKey, JSON.stringify(entries))
 }, [entries, mileageStorageKey])
 
+useEffect(() => {
+  const handleMileageSynced = () => {
+    const latest = loadFromStorage<MileageEntry[]>(mileageStorageKey, [])
+    setEntries(latest)
+  }
+
+  window.addEventListener("oneill-mileage-synced", handleMileageSynced)
+
+  return () => {
+    window.removeEventListener("oneill-mileage-synced", handleMileageSynced)
+  }
+}, [mileageStorageKey])
+
   const openEdit = (entry: MileageEntry) => {
     setEditingEntry(entry)
     setEditStartMileage(String(entry.start_mileage))
