@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import TrucksManager from "./TrucksManager"
+import ServicePage from "./ServicePage"
 
 type Driver = {
   id: number
@@ -97,6 +98,7 @@ export default function BossDashboard({
   const [driverName, setDriverName] = useState("")
   const [driverPin, setDriverPin] = useState("")
 const [driverTruck, setDriverTruck] = useState("")
+const [showServicePage, setShowServicePage] = useState(false)
 
 const [trucks, setTrucks] = useState<string[]>([])
 const [dieselStats, setDieselStats] =
@@ -509,6 +511,10 @@ setShowAddDriver(false)
 
   const visibleDrivers = sortDrivers(drivers)
 
+  if (showServicePage) {
+  return <ServicePage onBack={() => setShowServicePage(false)} />
+}
+
   return (
 <main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
 <div className="relative bg-white px-4 pt-4 h-[80px] flex items-center justify-between">
@@ -615,6 +621,17 @@ className="absolute bottom-1.5 right-2 text-[22px] text-blue-500 leading-none"
 >
 <span className="w-6 text-center text-[22px]">🚛</span>
 Trucks
+</button>
+
+<button
+ onClick={() => {
+    setShowBossMenu(false)
+    setShowServicePage(true)
+}}
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+>
+<span className="w-6 text-center text-[22px]">🛠️</span>  
+  Service
 </button>
 
 <button
