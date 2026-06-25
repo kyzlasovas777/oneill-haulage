@@ -108,12 +108,37 @@ async function compressImage(file: File): Promise<File> {
   })
 }
 
+const trucksStorageKey = "oneill-service-trucks"
+const serviceItemsStorageKey = "oneill-service-items"
+const servicePhotosStorageKey = "oneill-service-photos"
+
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key)
+    return value ? JSON.parse(value) : fallback
+  } catch {
+    return fallback
+  }
+}
+
 export default function ServicePage({ onBack }: ServicePageProps) {
-  const [trucks, setTrucks] = useState<Truck[]>([])
+ const [trucks, setTrucks] = useState<Truck[]>(() =>
+  loadFromStorage<Truck[]>(trucksStorageKey, [])
+)
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null)
 
-  const [items, setItems] = useState<ServiceItem[]>([])
-  const [photos, setPhotos] = useState<ServicePhoto[]>([])
+const [items, setItems] = useState<ServiceItem[]>(() =>
+  loadFromStorage<ServiceItem[]>(serviceItemsStorageKey, [])
+)
+
+const [allItems, setAllItems] = useState<ServiceItem[]>(() =>
+  loadFromStorage<ServiceItem[]>(serviceItemsStorageKey, [])
+)
+
+const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
+  loadFromStorage<ServicePhoto[]>(servicePhotosStorageKey, [])
+)
 
   const [archiveOpen, setArchiveOpen] = useState(false)
 
@@ -137,6 +162,8 @@ export default function ServicePage({ onBack }: ServicePageProps) {
 
   const today = formatEntryDate(new Date())
 
+  
+
   const loadTrucks = async () => {
     const { data, error } = await supabase.from("trucks").select("*").order("reg")
 
@@ -145,7 +172,9 @@ export default function ServicePage({ onBack }: ServicePageProps) {
       return
     }
 
-    setTrucks(data ?? [])
+   const nextTrucks = data ?? []
+setTrucks(nextTrucks)
+localStorage.setItem(trucksStorageKey, JSON.stringify(nextTrucks))
   }
 
   const loadAllItems = async () => {
@@ -158,7 +187,13 @@ export default function ServicePage({ onBack }: ServicePageProps) {
     return
   }
 
-  setItems(data ?? [])
+const nextItems = data ?? []
+
+setAllItems(nextItems)
+localStorage.setItem(
+  serviceItemsStorageKey,
+  JSON.stringify(nextItems)
+)
 }
 
   const loadItems = async (truckId: number) => {
@@ -173,14 +208,21 @@ export default function ServicePage({ onBack }: ServicePageProps) {
       return
     }
 
-    setItems(data ?? [])
+   const nextItems = data ?? []
+
+setAllItems(nextItems)
+localStorage.setItem(
+  serviceItemsStorageKey,
+  JSON.stringify(nextItems)
+)
 
     const ids = (data ?? []).map((item) => item.id)
 
-    if (ids.length === 0) {
-      setPhotos([])
-      return
-    }
+if (ids.length === 0) {
+  setPhotos([])
+  localStorage.setItem(servicePhotosStorageKey, JSON.stringify([]))
+  return
+}
 
     const { data: photoData, error: photoError } = await supabase
       .from("service_photos")
@@ -193,7 +235,9 @@ export default function ServicePage({ onBack }: ServicePageProps) {
       return
     }
 
-    setPhotos(photoData ?? [])
+  const nextPhotos = photoData ?? []
+setPhotos(nextPhotos)
+localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
   }
 
 useEffect(() => {
@@ -318,6 +362,7 @@ useEffect(() => {
   return
 }
 
+
     for (const file of photoFiles) {
       try {
         const uploaded = await uploadPhoto(file)
@@ -430,7 +475,11 @@ useEffect(() => {
 
     closeEdit()
 
-    if (selectedTruck) await loadItems(selectedTruck.id)
+  if (selectedTruck) {
+  await loadItems(selectedTruck.id)
+}
+
+await loadAllItems()
   }
 
   const activeItems = items.slice(0, ACTIVE_LIMIT)
@@ -487,7 +536,7 @@ useEffect(() => {
       <div className="mt-5 space-y-3">
 {!selectedTruck &&
   trucks.map((truck) => {
- const count = items.filter(
+const count = allItems.filter(
   (item) => item.truck_id === truck.id
 ).length
 
