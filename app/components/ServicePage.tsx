@@ -17,6 +17,8 @@ type ServiceItem = {
   truck_id: number
   entry_date: string
   mileage: number | null
+  parts_cost?: number | null
+  mechanic_bill?: number | null
   description: string | null
   created_at?: string
 }
@@ -144,6 +146,8 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
 
   const [addOpen, setAddOpen] = useState(false)
   const [mileage, setMileage] = useState("")
+  const [partsCost, setPartsCost] = useState("")
+const [mechanicBill, setMechanicBill] = useState("")
   const [description, setDescription] = useState("")
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
@@ -152,6 +156,8 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
 
   const [editingItem, setEditingItem] = useState<ServiceItem | null>(null)
   const [editMileage, setEditMileage] = useState("")
+  const [editPartsCost, setEditPartsCost] = useState("")
+const [editMechanicBill, setEditMechanicBill] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [editPhotoFiles, setEditPhotoFiles] = useState<File[]>([])
   const [editPhotoPreviews, setEditPhotoPreviews] = useState<string[]>([])
@@ -196,49 +202,44 @@ localStorage.setItem(
 )
 }
 
-  const loadItems = async (truckId: number) => {
-    const { data, error } = await supabase
-      .from("service_items")
-      .select("*")
-      .eq("truck_id", truckId)
-      .order("mileage", { ascending: false })
+const loadItems = async (truckId: number) => {
+  const { data, error } = await supabase
+    .from("service_items")
+    .select("*")
+    .eq("truck_id", truckId)
+    .order("mileage", { ascending: false })
 
-    if (error) {
-      console.log("SERVICE ITEMS LOAD ERROR:", error)
-      return
-    }
+  if (error) {
+    console.log("SERVICE ITEMS LOAD ERROR:", error)
+    return
+  }
 
-   const nextItems = data ?? []
+  const nextItems = data ?? []
+  setItems(nextItems)
 
-setAllItems(nextItems)
-localStorage.setItem(
-  serviceItemsStorageKey,
-  JSON.stringify(nextItems)
-)
+  const ids = nextItems.map((item) => item.id)
 
-    const ids = (data ?? []).map((item) => item.id)
+  if (ids.length === 0) {
+    setPhotos([])
+    localStorage.setItem(servicePhotosStorageKey, JSON.stringify([]))
+    return
+  }
 
-if (ids.length === 0) {
-  setPhotos([])
-  localStorage.setItem(servicePhotosStorageKey, JSON.stringify([]))
-  return
-}
+  const { data: photoData, error: photoError } = await supabase
+    .from("service_photos")
+    .select("*")
+    .in("service_id", ids)
+    .order("created_at", { ascending: false })
 
-    const { data: photoData, error: photoError } = await supabase
-      .from("service_photos")
-      .select("*")
-      .in("service_id", ids)
-      .order("created_at", { ascending: false })
-
-    if (photoError) {
-      console.log("SERVICE PHOTOS LOAD ERROR:", photoError)
-      return
-    }
+  if (photoError) {
+    console.log("SERVICE PHOTOS LOAD ERROR:", photoError)
+    return
+  }
 
   const nextPhotos = photoData ?? []
-setPhotos(nextPhotos)
-localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
-  }
+  setPhotos(nextPhotos)
+  localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
+}
 
 useEffect(() => {
   loadTrucks()
@@ -327,69 +328,92 @@ useEffect(() => {
     if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
-  const saveService = async () => {
-    if (saving || !selectedTruck) return
+ const saveService = async () => {
+  if (saving || !selectedTruck) return
 
-    if (!mileage && !description && photoFiles.length === 0) {
-      alert("Enter mileage, description or add photo")
-      return
-    }
+  if (!mileage && !description && photoFiles.length === 0) {
+    alert("Enter mileage, description or add photo")
+    return
+  }
 
-    const mileageNumber = mileage ? Number(mileage) : null
+  const mileageNumber = mileage ? Number(mileage) : null
+  const partsCostNumber = partsCost ? Number(partsCost) : 0
+  const mechanicBillNumber = mechanicBill ? Number(mechanicBill) : 0
 
-    if (mileageNumber !== null && mileageNumber <= 0) {
-      alert("Mileage must be higher than 0")
-      return
-    }
+  if (mileageNumber !== null && mileageNumber <= 0) {
+    alert("Mileage must be higher than 0")
+    return
+  }
 
-    setSaving(true)
+  setSaving(true)
 
-    const { data, error } = await supabase
-      .from("service_items")
-      .insert({
-        truck_id: selectedTruck.id,
-        entry_date: today,
-        mileage: mileageNumber,
-        description: description.trim() || null,
-      })
-      .select()
-      .single()
+  const { data, error } = await supabase
+    .from("service_items")
+    .insert({
+      truck_id: selectedTruck.id,
+      entry_date: today,
+      mileage: mileageNumber,
+      parts_cost: partsCostNumber,
+      mechanic_bill: mechanicBillNumber,
+      description: description.trim() || null,
+    })
+    .select()
+    .single()
 
   if (error || !data) {
-  console.log("SERVICE SAVE ERROR:", error)
-  alert(error?.message ?? "Save error")
-  setSaving(false)
-  return
-}
-
-
-    for (const file of photoFiles) {
-      try {
-        const uploaded = await uploadPhoto(file)
-
-        await supabase.from("service_photos").insert({
-          service_id: data.id,
-          photo_url: uploaded.photo_url,
-          photo_path: uploaded.photo_path,
-        })
-      } catch (err) {
-        console.log("SERVICE PHOTO SAVE ERROR:", err)
-      }
-    }
-
-    setMileage("")
-    setDescription("")
-    clearPhotos()
-    setAddOpen(false)
+    console.log("SERVICE SAVE ERROR:", error)
+    alert(error?.message ?? "Save error")
     setSaving(false)
-
-    await loadItems(selectedTruck.id)
+    return
   }
+
+  const savedItem: ServiceItem = data
+
+  const nextTruckItems = [savedItem, ...items]
+  setItems(nextTruckItems)
+
+  const nextAllItems = [savedItem, ...allItems]
+  setAllItems(nextAllItems)
+
+  localStorage.setItem(
+    serviceItemsStorageKey,
+    JSON.stringify(nextAllItems)
+  )
+
+  for (const file of photoFiles) {
+    try {
+      const uploaded = await uploadPhoto(file)
+
+      await supabase.from("service_photos").insert({
+        service_id: data.id,
+        photo_url: uploaded.photo_url,
+        photo_path: uploaded.photo_path,
+      })
+    } catch (err) {
+      console.log("SERVICE PHOTO SAVE ERROR:", err)
+    }
+  }
+
+  setMileage("")
+  setPartsCost("")
+  setMechanicBill("")
+  setDescription("")
+  clearPhotos()
+  setAddOpen(false)
+  setSaving(false)
+
+  await loadItems(selectedTruck.id)
+  await loadAllItems()
+}
 
   const openEdit = (item: ServiceItem) => {
     setEditingItem(item)
-    setEditMileage(item.mileage === null ? "" : String(item.mileage))
-    setEditDescription(item.description ?? "")
+ setEditMileage(item.mileage === null ? "" : String(item.mileage))
+setEditPartsCost(item.parts_cost === null ? "" : String(item.parts_cost ?? ""))
+setEditMechanicBill(
+  item.mechanic_bill === null ? "" : String(item.mechanic_bill ?? "")
+)
+setEditDescription(item.description ?? "")
     clearEditPhotos()
   }
 
@@ -404,6 +428,10 @@ useEffect(() => {
     if (editingSaving || !editingItem || !selectedTruck) return
 
     const mileageNumber = editMileage ? Number(editMileage) : null
+    const partsCostNumber = editPartsCost ? Number(editPartsCost) : 0
+const mechanicBillNumber = editMechanicBill
+  ? Number(editMechanicBill)
+  : 0
 
     if (mileageNumber !== null && mileageNumber <= 0) {
       alert("Mileage must be higher than 0")
@@ -416,6 +444,8 @@ useEffect(() => {
       .from("service_items")
       .update({
         mileage: mileageNumber,
+         parts_cost: partsCostNumber,
+        mechanic_bill: mechanicBillNumber,
         description: editDescription.trim() || null,
       })
       .eq("id", editingItem.id)
@@ -482,8 +512,13 @@ useEffect(() => {
 await loadAllItems()
   }
 
-  const activeItems = items.slice(0, ACTIVE_LIMIT)
-  const visibleItems = archiveOpen ? items : activeItems
+const truckItems = selectedTruck
+  ? items.filter((item) => item.truck_id === selectedTruck.id)
+  : []
+
+const activeItems = truckItems.slice(0, ACTIVE_LIMIT)
+
+const visibleItems = archiveOpen ? truckItems : activeItems
 
   return (
     <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
@@ -579,6 +614,26 @@ const count = allItems.filter(
 
                     <div>
                       Mileage: <b>{item.mileage ?? "-"}</b>
+
+<div>
+  Parts: <b>£{Number(item.parts_cost ?? 0).toFixed(2)}</b>
+</div>
+
+<div>
+  Mechanic: <b>£{Number(item.mechanic_bill ?? 0).toFixed(2)}</b>
+</div>
+
+<div>
+  Total:{" "}
+  <b>
+    £
+    {(
+      Number(item.parts_cost ?? 0) +
+      Number(item.mechanic_bill ?? 0)
+    ).toFixed(2)}
+  </b>
+</div>
+
                     </div>
 
                     {item.description && (
@@ -619,12 +674,14 @@ const count = allItems.filter(
       {selectedTruck && !archiveOpen && (
         <div className="fixed left-0 right-0 bottom-0 z-[90] bg-white p-3">
           <button
-            onClick={() => {
-              setMileage("")
-              setDescription("")
-              clearPhotos()
-              setAddOpen(true)
-            }}
+         onClick={() => {
+  setMileage("")
+  setPartsCost("")
+  setMechanicBill("")
+  setDescription("")
+  clearPhotos()
+  setAddOpen(true)
+}}
             className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
           >
             + Add Service
@@ -655,6 +712,22 @@ const count = allItems.filter(
                 onChange={(e) => setMileage(e.target.value)}
                 className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
               />
+
+<input
+  type="number"
+  placeholder="Parts Cost (£)"
+  value={partsCost}
+  onChange={(e) => setPartsCost(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+/>
+
+<input
+  type="number"
+  placeholder="Mechanic Bill (£)"
+  value={mechanicBill}
+  onChange={(e) => setMechanicBill(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+/>
 
               <textarea
                 placeholder="Description / parts changed / invoice note"
@@ -714,6 +787,8 @@ const count = allItems.filter(
                     setAddOpen(false)
                     clearPhotos()
                     setMileage("")
+                    setPartsCost("")
+                    setMechanicBill("")
                     setDescription("")
                   }}
                   className="flex-1 h-[46px] rounded-[14px] bg-zinc-200 font-bold"
@@ -757,6 +832,22 @@ const count = allItems.filter(
                 onChange={(e) => setEditMileage(e.target.value)}
                 className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
               />
+
+              <input
+  type="number"
+  placeholder="Parts Cost (£)"
+  value={editPartsCost}
+  onChange={(e) => setEditPartsCost(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+/>
+
+<input
+  type="number"
+  placeholder="Mechanic Bill (£)"
+  value={editMechanicBill}
+  onChange={(e) => setEditMechanicBill(e.target.value)}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px]"
+/>
 
               <textarea
                 placeholder="Description / parts changed / invoice note"
