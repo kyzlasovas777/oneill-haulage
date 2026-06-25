@@ -409,9 +409,16 @@ useEffect(() => {
   const openEdit = (item: ServiceItem) => {
     setEditingItem(item)
  setEditMileage(item.mileage === null ? "" : String(item.mileage))
-setEditPartsCost(item.parts_cost === null ? "" : String(item.parts_cost ?? ""))
+setEditPartsCost(
+  !item.parts_cost || Number(item.parts_cost) === 0
+    ? ""
+    : String(item.parts_cost)
+)
+
 setEditMechanicBill(
-  item.mechanic_bill === null ? "" : String(item.mechanic_bill ?? "")
+  !item.mechanic_bill || Number(item.mechanic_bill) === 0
+    ? ""
+    : String(item.mechanic_bill)
 )
 setEditDescription(item.description ?? "")
     clearEditPhotos()
