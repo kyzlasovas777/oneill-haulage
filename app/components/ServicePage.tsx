@@ -143,6 +143,7 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
 )
 
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [expandedTruckId, setExpandedTruckId] = useState<number | null>(null)
 
   const [addOpen, setAddOpen] = useState(false)
   const [mileage, setMileage] = useState("")
@@ -165,6 +166,7 @@ const [editMechanicBill, setEditMechanicBill] = useState("")
   const editPhotoInputRef = useRef<HTMLInputElement | null>(null)
 
   const [openPhoto, setOpenPhoto] = useState<string | null>(null)
+  const [totalsTruck, setTotalsTruck] = useState<Truck | null>(null)
 
   const today = formatEntryDate(new Date())
 
@@ -526,6 +528,54 @@ const truckItems = selectedTruck
 const activeItems = truckItems.slice(0, ACTIVE_LIMIT)
 
 const visibleItems = archiveOpen ? truckItems : activeItems
+const currentYear = new Date().getFullYear()
+
+const getTruckYearTotal = (truckId: number, year: number) => {
+  return allItems
+    .filter((item) => {
+      const itemYear = parseEntryDate(item.entry_date).getFullYear()
+      return item.truck_id === truckId && itemYear === year
+    })
+    .reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts_cost ?? 0) +
+        Number(item.mechanic_bill ?? 0),
+      0
+    )
+}
+
+const getTruckYearBreakdown = (truckId: number) => {
+  const groups: Record<
+    number,
+    { parts: number; mechanic: number; total: number }
+  > = {}
+
+  allItems
+    .filter((item) => item.truck_id === truckId)
+    .forEach((item) => {
+      const year = parseEntryDate(item.entry_date).getFullYear()
+
+      if (!groups[year]) {
+        groups[year] = {
+          parts: 0,
+          mechanic: 0,
+          total: 0,
+        }
+      }
+
+      const parts = Number(item.parts_cost ?? 0)
+      const mechanic = Number(item.mechanic_bill ?? 0)
+
+      groups[year].parts += parts
+      groups[year].mechanic += mechanic
+      groups[year].total += parts + mechanic
+    })
+
+  return Object.entries(groups).sort(
+    ([a], [b]) => Number(b) - Number(a)
+  )
+}
 
   return (
     <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
@@ -582,19 +632,57 @@ const count = allItems.filter(
   (item) => item.truck_id === truck.id
 ).length
 
-    return (
-      <button
-        key={truck.id}
-        onClick={() => setSelectedTruck(truck)}
-        className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
-      >
+ return (
+  <button
+    key={truck.id}
+    onClick={() => setSelectedTruck(truck)}
+    className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
+  >
+    <div className="flex items-start justify-between">
+      <div>
         <div className="font-bold text-[18px]">{truck.reg}</div>
 
         <div className="text-[14px] text-zinc-500">
           {count} {count === 1 ? "service" : "services"}
         </div>
-      </button>
-    )
+      </div>
+
+      <div className="text-right">
+        <div className="text-[12px] text-zinc-500">
+          {currentYear} Total
+        </div>
+
+        <div className="font-bold">
+          £{getTruckYearTotal(truck.id, currentYear).toFixed(2)}
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpandedTruckId(
+              expandedTruckId === truck.id ? null : truck.id
+            )
+          }}
+          className="text-[16px] text-blue-500 font-bold"
+        >
+          {expandedTruckId === truck.id ? "▲" : "▼"}
+        </button>
+      </div>
+    </div>
+
+  {expandedTruckId === truck.id && (
+  <div className="mt-3 pt-3 border-t border-zinc-300 space-y-1">
+    {getTruckYearBreakdown(truck.id).map(([year, total]) => (
+     <div className="flex justify-end items-center gap-3 text-[15px]">
+  <span className="text-zinc-500">{year}</span>
+  <b>£{total.total.toFixed(2)}</b>
+</div>
+    ))}
+  </div>
+)}
+  </button>
+)
   })}
 
         {!selectedTruck && trucks.length === 0 && (
@@ -956,6 +1044,49 @@ const count = allItems.filter(
           </div>
         </div>
       )}
+
+      {totalsTruck && (
+  <div
+    onClick={() => setTotalsTruck(null)}
+    className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-4"
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="w-full max-w-[360px] bg-white rounded-[22px] p-4"
+    >
+      <h2 className="text-[22px] font-bold mb-4">
+        {totalsTruck.reg} totals
+      </h2>
+
+      <div className="space-y-3">
+        {getTruckYearBreakdown(totalsTruck.id).map(([year, total]) => (
+          <div
+            key={year}
+            className="bg-[#f5f5f5] rounded-[16px] border border-green-400 p-3"
+          >
+            <div className="font-bold text-[18px]">{year}</div>
+            <div>Parts: <b>£{total.parts.toFixed(2)}</b></div>
+            <div>Mechanic: <b>£{total.mechanic.toFixed(2)}</b></div>
+            <div>Total: <b>£{total.total.toFixed(2)}</b></div>
+          </div>
+        ))}
+
+        {getTruckYearBreakdown(totalsTruck.id).length === 0 && (
+          <div className="text-center text-zinc-400">
+            No costs yet
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => setTotalsTruck(null)}
+        className="w-full h-[46px] rounded-[14px] bg-blue-600 text-white font-bold mt-4"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
 
       {openPhoto && (
         <div
