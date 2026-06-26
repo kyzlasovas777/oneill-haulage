@@ -55,6 +55,10 @@ function displayDate(dateText: string) {
     year: "numeric",
   })
 }
+function entryDateToUkText(dateText: string) {
+  const [year, month, day] = dateText.split(".")
+  return `${day}/${month}/${year}`
+}
 
 function toInputDate(dateText: string) {
   return dateText.replaceAll(".", "-")
@@ -155,6 +159,9 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
 
   const [addOpen, setAddOpen] = useState(false)
  const [entryDate, setEntryDate] = useState(() => formatEntryDate(new Date()))
+const [entryDateText, setEntryDateText] = useState(() =>
+  entryDateToUkText(formatEntryDate(new Date()))
+)
   const [mileage, setMileage] = useState("")
   const [partsCost, setPartsCost] = useState("")
 const [mechanicBill, setMechanicBill] = useState("")
@@ -166,6 +173,7 @@ const [mechanicBill, setMechanicBill] = useState("")
 
   const [editingItem, setEditingItem] = useState<ServiceItem | null>(null)
   const [editEntryDate, setEditEntryDate] = useState("")
+  const [editDateText, setEditDateText] = useState("")
   const [editMileage, setEditMileage] = useState("")
   const [editPartsCost, setEditPartsCost] = useState("")
 const [editMechanicBill, setEditMechanicBill] = useState("")
@@ -174,6 +182,7 @@ const [editMechanicBill, setEditMechanicBill] = useState("")
   const [editPhotoPreviews, setEditPhotoPreviews] = useState<string[]>([])
   const [editingSaving, setEditingSaving] = useState(false)
   const editPhotoInputRef = useRef<HTMLInputElement | null>(null)
+
 
   const [openPhoto, setOpenPhoto] = useState<string | null>(null)
   const [totalsTruck, setTotalsTruck] = useState<Truck | null>(null)
@@ -406,6 +415,9 @@ useEffect(() => {
     }
   }
 
+setEntryDate(today)
+setEntryDateText(entryDateToUkText(today))
+
   setMileage("")
   setPartsCost("")
   setMechanicBill("")
@@ -418,31 +430,39 @@ useEffect(() => {
   await loadAllItems()
 }
 
-  const openEdit = (item: ServiceItem) => {
-    setEditingItem(item)
-    setEditEntryDate(item.entry_date)
- setEditMileage(item.mileage === null ? "" : String(item.mileage))
-setEditPartsCost(
-  !item.parts_cost || Number(item.parts_cost) === 0
-    ? ""
-    : String(item.parts_cost)
-)
+const openEdit = (item: ServiceItem) => {
+  setEditingItem(item)
+  setEditEntryDate(item.entry_date)
+setEditDateText(entryDateToUkText(item.entry_date))
 
-setEditMechanicBill(
-  !item.mechanic_bill || Number(item.mechanic_bill) === 0
-    ? ""
-    : String(item.mechanic_bill)
-)
-setEditDescription(item.description ?? "")
-    clearEditPhotos()
-  }
+  setEditMileage(item.mileage === null ? "" : String(item.mileage))
 
-  const closeEdit = () => {
-    setEditingItem(null)
-    setEditMileage("")
-    setEditDescription("")
-    clearEditPhotos()
-  }
+  setEditPartsCost(
+    !item.parts_cost || Number(item.parts_cost) === 0
+      ? ""
+      : String(item.parts_cost)
+  )
+
+  setEditMechanicBill(
+    !item.mechanic_bill || Number(item.mechanic_bill) === 0
+      ? ""
+      : String(item.mechanic_bill)
+  )
+
+  setEditDescription(item.description ?? "")
+  clearEditPhotos()
+}
+
+const closeEdit = () => {
+  setEditingItem(null)
+  setEditEntryDate("")
+  setEditDateText("")
+  setEditMileage("")
+  setEditPartsCost("")
+  setEditMechanicBill("")
+  setEditDescription("")
+  clearEditPhotos()
+}
 
   const saveEditService = async () => {
     if (editingSaving || !editingItem || !selectedTruck) return
@@ -533,14 +553,35 @@ const mechanicBillNumber = editMechanicBill
 await loadAllItems()
   }
 
+const currentYear = new Date().getFullYear()
+
 const truckItems = selectedTruck
-  ? items.filter((item) => item.truck_id === selectedTruck.id)
+  ? items
+      .filter((item) => {
+        const itemYear = parseEntryDate(item.entry_date).getFullYear()
+        return item.truck_id === selectedTruck.id && itemYear === currentYear
+      })
+      .sort(
+        (a, b) =>
+          parseEntryDate(b.entry_date).getTime() -
+          parseEntryDate(a.entry_date).getTime()
+      )
+  : []
+
+const archiveItems = selectedTruck
+  ? items
+      .filter((item) => item.truck_id === selectedTruck.id)
+      .sort(
+        (a, b) =>
+          parseEntryDate(b.entry_date).getTime() -
+          parseEntryDate(a.entry_date).getTime()
+      )
   : []
 
 const activeItems = truckItems.slice(0, ACTIVE_LIMIT)
 
-const visibleItems = archiveOpen ? truckItems : activeItems
-const currentYear = new Date().getFullYear()
+const visibleItems = archiveOpen ? archiveItems : activeItems
+
 
 const getTruckYearTotal = (truckId: number, year: number) => {
   return allItems
@@ -588,6 +629,8 @@ const getTruckYearBreakdown = (truckId: number) => {
     ([a], [b]) => Number(b) - Number(a)
   )
 }
+
+
 
   return (
     <div className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
@@ -640,9 +683,10 @@ const getTruckYearBreakdown = (truckId: number) => {
       <div className="mt-5 space-y-3">
 {!selectedTruck &&
   trucks.map((truck) => {
-const count = allItems.filter(
-  (item) => item.truck_id === truck.id
-).length
+const count = allItems.filter((item) => {
+  const itemYear = parseEntryDate(item.entry_date).getFullYear()
+  return item.truck_id === truck.id && itemYear === currentYear
+}).length
 
  return (
   <button
@@ -787,6 +831,7 @@ const count = allItems.filter(
   setDescription("")
   clearPhotos()
   setEntryDate(today)
+  setEntryDateText(entryDateToUkText(today))
   setAddOpen(true)
 }}
             className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
@@ -810,10 +855,19 @@ const count = allItems.filter(
 <input
   type="text"
   placeholder="DD/MM/YYYY"
-  value={displayDate(entryDate).replace(/^.*?, /, "")}
+  value={entryDateText}
   onChange={(e) => {
-    const [day, month, year] = e.target.value.split("/")
-    if (day && month && year) {
+    let value = e.target.value.replace(/\D/g, "")
+
+    if (value.length > 2) value = value.slice(0, 2) + "/" + value.slice(2)
+    if (value.length > 5) value = value.slice(0, 5) + "/" + value.slice(5)
+    if (value.length > 10) value = value.slice(0, 10)
+
+    setEntryDateText(value)
+
+    const [day, month, year] = value.split("/")
+
+    if (day && month && year?.length === 4) {
       setEntryDate(`${year}.${month}.${day}`)
     }
   }}
@@ -940,10 +994,19 @@ const count = allItems.filter(
 <input
   type="text"
   placeholder="DD/MM/YYYY"
-  value={displayDate(editEntryDate).replace(/^.*?, /, "")}
+  value={editDateText}
   onChange={(e) => {
-    const [day, month, year] = e.target.value.split("/")
-    if (day && month && year) {
+    let value = e.target.value.replace(/\D/g, "")
+
+    if (value.length > 2) value = value.slice(0, 2) + "/" + value.slice(2)
+    if (value.length > 5) value = value.slice(0, 5) + "/" + value.slice(5)
+    if (value.length > 10) value = value.slice(0, 10)
+
+    setEditDateText(value)
+
+    const [day, month, year] = value.split("/")
+
+    if (day && month && year?.length === 4) {
       setEditEntryDate(`${year}.${month}.${day}`)
     }
   }}
