@@ -1447,7 +1447,11 @@ Add Place
       trailer: e.target.value.toUpperCase(),
     }))
   }
-  className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
+  autoComplete="off"
+  autoCorrect="off"
+  autoCapitalize="characters"
+  spellCheck={false}
+  className="w-full h-[46px] rounded-[20px] bg-[#fdfdf4] px-5 text-[18px] text-center"
 />
 
 
