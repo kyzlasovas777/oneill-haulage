@@ -162,6 +162,10 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
 const [entryDateText, setEntryDateText] = useState(() =>
   entryDateToUkText(formatEntryDate(new Date()))
 )
+
+const [entryDay, setEntryDay] = useState("")
+const [entryMonth, setEntryMonth] = useState("")
+const [entryYear, setEntryYear] = useState("")
   const [mileage, setMileage] = useState("")
   const [partsCost, setPartsCost] = useState("")
 const [mechanicBill, setMechanicBill] = useState("")
@@ -174,6 +178,9 @@ const [mechanicBill, setMechanicBill] = useState("")
   const [editingItem, setEditingItem] = useState<ServiceItem | null>(null)
   const [editEntryDate, setEditEntryDate] = useState("")
   const [editDateText, setEditDateText] = useState("")
+  const [editDay, setEditDay] = useState("")
+const [editMonth, setEditMonth] = useState("")
+const [editYear, setEditYear] = useState("")
   const [editMileage, setEditMileage] = useState("")
   const [editPartsCost, setEditPartsCost] = useState("")
 const [editMechanicBill, setEditMechanicBill] = useState("")
@@ -433,6 +440,12 @@ setEntryDateText(entryDateToUkText(today))
 const openEdit = (item: ServiceItem) => {
   setEditingItem(item)
   setEditEntryDate(item.entry_date)
+
+  const [year, month, day] = item.entry_date.split(".")
+setEditDay(day)
+setEditMonth(month)
+setEditYear(year)
+
 setEditDateText(entryDateToUkText(item.entry_date))
 
   setEditMileage(item.mileage === null ? "" : String(item.mileage))
@@ -473,7 +486,9 @@ const mechanicBillNumber = editMechanicBill
   ? Number(editMechanicBill)
   : 0
 
-const [day, month, year] = editDateText.split("/")
+const day = editDay
+const month = editMonth
+const year = editYear
 
 if (!day || !month || !year || year.length !== 4) {
   alert("Enter date as DD/MM/YYYY")
@@ -839,9 +854,14 @@ const count = allItems.filter((item) => {
   setMechanicBill("")
   setDescription("")
   clearPhotos()
-  setEntryDate(today)
-  setEntryDateText(entryDateToUkText(today))
-  setAddOpen(true)
+setEntryDate(today)
+
+const [year, month, day] = today.split(".")
+setEntryDay(day)
+setEntryMonth(month)
+setEntryYear(year)
+
+setAddOpen(true)
 }}
             className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
           >
@@ -861,27 +881,52 @@ const count = allItems.filter((item) => {
           >
             <h2 className="text-[22px] font-bold mb-3">Add Service</h2>
 
-<input
-  type="text"
-  placeholder="DD/MM/YYYY"
-  value={entryDateText}
-  onChange={(e) => {
-    let value = e.target.value.replace(/\D/g, "")
+<div className="flex gap-2 mb-3">
+  <input
+    type="number"
+    placeholder="DD"
+    value={entryDay}
+    onChange={(e) => {
+      const day = e.target.value.slice(0, 2)
+      setEntryDay(day)
 
-    if (value.length > 2) value = value.slice(0, 2) + "/" + value.slice(2)
-    if (value.length > 5) value = value.slice(0, 5) + "/" + value.slice(5)
-    if (value.length > 10) value = value.slice(0, 10)
+      if (day.length === 2 && entryMonth.length === 2 && entryYear.length === 4) {
+        setEntryDate(`${entryYear}.${entryMonth}.${day}`)
+      }
+    }}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
 
-    setEntryDateText(value)
+  <input
+    type="number"
+    placeholder="MM"
+    value={entryMonth}
+    onChange={(e) => {
+      const month = e.target.value.slice(0, 2)
+      setEntryMonth(month)
 
-    const [day, month, year] = value.split("/")
+      if (entryDay.length === 2 && month.length === 2 && entryYear.length === 4) {
+        setEntryDate(`${entryYear}.${month}.${entryDay}`)
+      }
+    }}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
 
-    if (day && month && year?.length === 4) {
-      setEntryDate(`${year}.${month}.${day}`)
-    }
-  }}
-  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px] mb-3"
-/>
+  <input
+    type="number"
+    placeholder="YYYY"
+    value={entryYear}
+    onChange={(e) => {
+      const year = e.target.value.slice(0, 4)
+      setEntryYear(year)
+
+      if (entryDay.length === 2 && entryMonth.length === 2 && year.length === 4) {
+        setEntryDate(`${year}.${entryMonth}.${entryDay}`)
+      }
+    }}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
+</div>
 
             <div className="space-y-3">
               <input
@@ -1000,13 +1045,52 @@ const count = allItems.filter((item) => {
             <h2 className="text-[22px] font-bold mb-3">Edit Service</h2>
 
             <div className="text-[14px] font-bold mb-3 text-zinc-500">
-<input
-  type="text"
-  placeholder="DD/MM/YYYY"
-  value={editDateText}
-  onChange={(e) => setEditDateText(e.target.value)}
-  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px] mb-3"
-/>
+<div className="flex gap-2 mb-3">
+  <input
+    type="number"
+    placeholder="DD"
+   value={editDay}
+ onChange={(e) => {
+  const day = e.target.value.slice(0, 2)
+  setEditDay(day)
+
+  if (day.length === 2 && editMonth.length === 2 && editYear.length === 4) {
+    setEditEntryDate(`${editYear}.${editMonth}.${day}`)
+  }
+}}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
+
+  <input
+    type="number"
+    placeholder="MM"
+  value={editMonth}
+  onChange={(e) => {
+  const month = e.target.value.slice(0, 2)
+  setEditMonth(month)
+
+  if (editDay.length === 2 && month.length === 2 && editYear.length === 4) {
+    setEditEntryDate(`${editYear}.${month}.${editDay}`)
+  }
+}}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
+
+  <input
+    type="number"
+    placeholder="YYYY"
+   value={editYear}
+  onChange={(e) => {
+  const year = e.target.value.slice(0, 4)
+  setEditYear(year)
+
+  if (editDay.length === 2 && editMonth.length === 2 && year.length === 4) {
+    setEditEntryDate(`${year}.${editMonth}.${editDay}`)
+  }
+}}
+    className="w-1/3 h-[46px] rounded-[12px] border px-3 text-[16px]"
+  />
+</div>
             </div>
 
             <div className="space-y-3">
