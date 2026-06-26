@@ -56,6 +56,14 @@ function displayDate(dateText: string) {
   })
 }
 
+function toInputDate(dateText: string) {
+  return dateText.replaceAll(".", "-")
+}
+
+function fromInputDate(dateText: string) {
+  return dateText.replaceAll("-", ".")
+}
+
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/")) return file
 
@@ -146,6 +154,7 @@ const [photos, setPhotos] = useState<ServicePhoto[]>(() =>
   const [expandedTruckId, setExpandedTruckId] = useState<number | null>(null)
 
   const [addOpen, setAddOpen] = useState(false)
+ const [entryDate, setEntryDate] = useState(() => formatEntryDate(new Date()))
   const [mileage, setMileage] = useState("")
   const [partsCost, setPartsCost] = useState("")
 const [mechanicBill, setMechanicBill] = useState("")
@@ -156,6 +165,7 @@ const [mechanicBill, setMechanicBill] = useState("")
   const photoInputRef = useRef<HTMLInputElement | null>(null)
 
   const [editingItem, setEditingItem] = useState<ServiceItem | null>(null)
+  const [editEntryDate, setEditEntryDate] = useState("")
   const [editMileage, setEditMileage] = useState("")
   const [editPartsCost, setEditPartsCost] = useState("")
 const [editMechanicBill, setEditMechanicBill] = useState("")
@@ -353,7 +363,7 @@ useEffect(() => {
     .from("service_items")
     .insert({
       truck_id: selectedTruck.id,
-      entry_date: today,
+    entry_date: entryDate,
       mileage: mileageNumber,
       parts_cost: partsCostNumber,
       mechanic_bill: mechanicBillNumber,
@@ -410,6 +420,7 @@ useEffect(() => {
 
   const openEdit = (item: ServiceItem) => {
     setEditingItem(item)
+    setEditEntryDate(item.entry_date)
  setEditMileage(item.mileage === null ? "" : String(item.mileage))
 setEditPartsCost(
   !item.parts_cost || Number(item.parts_cost) === 0
@@ -451,12 +462,13 @@ const mechanicBillNumber = editMechanicBill
 
     const { error } = await supabase
       .from("service_items")
-      .update({
-        mileage: mileageNumber,
-         parts_cost: partsCostNumber,
-        mechanic_bill: mechanicBillNumber,
-        description: editDescription.trim() || null,
-      })
+     .update({
+  entry_date: editEntryDate,
+  mileage: mileageNumber,
+  parts_cost: partsCostNumber,
+  mechanic_bill: mechanicBillNumber,
+  description: editDescription.trim() || null,
+})
       .eq("id", editingItem.id)
 
     if (error) {
@@ -656,25 +668,24 @@ const count = allItems.filter(
           £{getTruckYearTotal(truck.id, currentYear).toFixed(2)}
         </div>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            setExpandedTruckId(
-              expandedTruckId === truck.id ? null : truck.id
-            )
-          }}
-          className="text-[16px] text-blue-500 font-bold"
-        >
-          {expandedTruckId === truck.id ? "▲" : "▼"}
-        </button>
+    <div
+  onClick={(e) => {
+    e.stopPropagation()
+    setExpandedTruckId(
+      expandedTruckId === truck.id ? null : truck.id
+    )
+  }}
+  className="text-[16px] text-blue-500 font-bold cursor-pointer"
+>
+  {expandedTruckId === truck.id ? "▲" : "▼"}
+</div>
       </div>
     </div>
 
   {expandedTruckId === truck.id && (
   <div className="mt-3 pt-3 border-t border-zinc-300 space-y-1">
     {getTruckYearBreakdown(truck.id).map(([year, total]) => (
-     <div className="flex justify-end items-center gap-3 text-[15px]">
+    <div key={year} className="flex justify-end items-center gap-3 text-[15px]">
   <span className="text-zinc-500">{year}</span>
   <b>£{total.total.toFixed(2)}</b>
 </div>
@@ -775,6 +786,7 @@ const count = allItems.filter(
   setMechanicBill("")
   setDescription("")
   clearPhotos()
+  setEntryDate(today)
   setAddOpen(true)
 }}
             className="w-full h-[44px] rounded-[16px] bg-blue-600 text-white font-bold text-[16px]"
@@ -795,9 +807,18 @@ const count = allItems.filter(
           >
             <h2 className="text-[22px] font-bold mb-3">Add Service</h2>
 
-            <div className="text-[14px] font-bold mb-3 text-zinc-500">
-              {displayDate(today)}
-            </div>
+<input
+  type="text"
+  placeholder="DD/MM/YYYY"
+  value={displayDate(entryDate).replace(/^.*?, /, "")}
+  onChange={(e) => {
+    const [day, month, year] = e.target.value.split("/")
+    if (day && month && year) {
+      setEntryDate(`${year}.${month}.${day}`)
+    }
+  }}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px] mb-3"
+/>
 
             <div className="space-y-3">
               <input
@@ -916,7 +937,18 @@ const count = allItems.filter(
             <h2 className="text-[22px] font-bold mb-3">Edit Service</h2>
 
             <div className="text-[14px] font-bold mb-3 text-zinc-500">
-              {displayDate(editingItem.entry_date)}
+<input
+  type="text"
+  placeholder="DD/MM/YYYY"
+  value={displayDate(editEntryDate).replace(/^.*?, /, "")}
+  onChange={(e) => {
+    const [day, month, year] = e.target.value.split("/")
+    if (day && month && year) {
+      setEditEntryDate(`${year}.${month}.${day}`)
+    }
+  }}
+  className="w-full h-[46px] rounded-[12px] border px-4 text-[16px] mb-3"
+/>
             </div>
 
             <div className="space-y-3">
