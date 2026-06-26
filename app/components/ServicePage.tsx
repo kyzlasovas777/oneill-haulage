@@ -602,7 +602,7 @@ const archiveItems = selectedTruck
       )
   : []
 
-const activeItems = truckItems.slice(0, ACTIVE_LIMIT)
+const activeItems = truckItems
 
 const visibleItems = archiveOpen ? archiveItems : activeItems
 
@@ -782,31 +782,36 @@ const count = allItems.filter((item) => {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="pl-2">
-                    <div className="font-bold">
-                      {displayDate(item.entry_date)}
-                    </div>
-
-                    <div>
-                      Mileage: <b>{item.mileage ?? "-"}</b>
-
-<div>
-  Parts: <b>£{Number(item.parts_cost ?? 0).toFixed(2)}</b>
+                 <div className="text-center text-[14px] text-zinc-500 font-semibold mb-1">
+  {displayDate(item.entry_date)}
 </div>
 
-<div>
-  Mechanic: <b>£{Number(item.mechanic_bill ?? 0).toFixed(2)}</b>
-</div>
+<div className="space-y-1 mb-3">
+  <div className="flex justify-between">
+    <span>Mileage</span>
+    <b>{item.mileage ?? "-"}</b>
+  </div>
 
-<div>
-  Total:{" "}
-  <b>
-    £
-    {(
-      Number(item.parts_cost ?? 0) +
-      Number(item.mechanic_bill ?? 0)
-    ).toFixed(2)}
-  </b>
-</div>
+  <div className="flex justify-between">
+    <span>Parts</span>
+    <b>£{Number(item.parts_cost ?? 0).toFixed(2)}</b>
+  </div>
+
+  <div className="flex justify-between">
+    <span>Mechanic</span>
+    <b>£{Number(item.mechanic_bill ?? 0).toFixed(2)}</b>
+  </div>
+
+  <div className="flex justify-between border-t pt-1">
+    <span>Total</span>
+    <b>
+      £{(
+        Number(item.parts_cost ?? 0) +
+        Number(item.mechanic_bill ?? 0)
+      ).toFixed(2)}
+    </b>
+  </div>
+
 
                     </div>
 
