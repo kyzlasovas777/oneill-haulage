@@ -473,6 +473,15 @@ const mechanicBillNumber = editMechanicBill
   ? Number(editMechanicBill)
   : 0
 
+const [day, month, year] = editDateText.split("/")
+
+if (!day || !month || !year || year.length !== 4) {
+  alert("Enter date as DD/MM/YYYY")
+  return
+}
+
+const editDateToSave = `${year}.${month}.${day}`
+
     if (mileageNumber !== null && mileageNumber <= 0) {
       alert("Mileage must be higher than 0")
       return
@@ -483,7 +492,7 @@ const mechanicBillNumber = editMechanicBill
     const { error } = await supabase
       .from("service_items")
      .update({
-  entry_date: editEntryDate,
+  entry_date: editDateToSave,
   mileage: mileageNumber,
   parts_cost: partsCostNumber,
   mechanic_bill: mechanicBillNumber,
@@ -995,21 +1004,7 @@ const count = allItems.filter((item) => {
   type="text"
   placeholder="DD/MM/YYYY"
   value={editDateText}
-  onChange={(e) => {
-    let value = e.target.value.replace(/\D/g, "")
-
-    if (value.length > 2) value = value.slice(0, 2) + "/" + value.slice(2)
-    if (value.length > 5) value = value.slice(0, 5) + "/" + value.slice(5)
-    if (value.length > 10) value = value.slice(0, 10)
-
-    setEditDateText(value)
-
-    const [day, month, year] = value.split("/")
-
-    if (day && month && year?.length === 4) {
-      setEditEntryDate(`${year}.${month}.${day}`)
-    }
-  }}
+  onChange={(e) => setEditDateText(e.target.value)}
   className="w-full h-[46px] rounded-[12px] border px-4 text-[16px] mb-3"
 />
             </div>
