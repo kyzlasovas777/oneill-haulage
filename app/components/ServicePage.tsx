@@ -786,26 +786,27 @@ const count = allItems.filter((item) => {
   {displayDate(item.entry_date)}
 </div>
 
-<div className="space-y-1 mb-3">
-  <div className="flex justify-between">
-    <span>Mileage</span>
+<div className="space-y-2 mb-3 text-[15px]">
+  <div className="flex">
+    <span className="w-[95px]">Mileage</span>
     <b>{item.mileage ?? "-"}</b>
   </div>
 
-  <div className="flex justify-between">
-    <span>Parts</span>
+  <div className="flex">
+    <span className="w-[95px]">Parts</span>
     <b>£{Number(item.parts_cost ?? 0).toFixed(2)}</b>
   </div>
 
-  <div className="flex justify-between">
-    <span>Mechanic</span>
+  <div className="flex">
+    <span className="w-[95px]">Mechanic</span>
     <b>£{Number(item.mechanic_bill ?? 0).toFixed(2)}</b>
   </div>
 
-  <div className="flex justify-between border-t pt-1">
-    <span>Total</span>
+<div className="border-t pt-2 flex w-[160px]">
+    <span className="w-[95px] font-semibold">Total</span>
     <b>
-      £{(
+      £
+      {(
         Number(item.parts_cost ?? 0) +
         Number(item.mechanic_bill ?? 0)
       ).toFixed(2)}
