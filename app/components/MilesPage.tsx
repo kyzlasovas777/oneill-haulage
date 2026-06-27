@@ -636,7 +636,7 @@ const visibleTotal = visibleEntries.reduce(
       <button
         key={title}
         onClick={() => setActiveArchiveWeek(title)}
-        className="w-full text-center bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-3 shadow-sm"
+      className="relative w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-2 shadow-sm"
       >
         <div className="font-bold">{title}</div>
         <div className="text-[14px] text-zinc-500">
@@ -688,13 +688,17 @@ const visibleTotal = visibleEntries.reduce(
 
 <div className="text-[11px] text-zinc-500 mt-1 text-right">
   {entry.syncStatus === "pending"
-    ? "⏳ Waiting sync"
+    ? (
+        <span className="text-[11px] text-black">
+          <span className="text-amber-600 font-bold">⏳</span> Waiting sync
+        </span>
+      )
     : entry.syncStatus === "synced"
     ? (
-   <span className="text-[11px] text-black">
-  <span className="text-green-600 font-bold">&#10003;</span> Synced
-</span>
-    )
+        <span className="text-[11px] text-black">
+          <span className="text-green-600 font-bold">✓</span> Synced
+        </span>
+      )
     : ""}
 </div>
 

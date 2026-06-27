@@ -949,9 +949,9 @@ const count = allItems.filter((item) => {
 
   <div className="absolute right-4">
    {item.syncStatus === "pending" ? (
-  <span className="text-[13px] text-amber-600 font-semibold">
-    ⌛ Waiting sync
-  </span>
+ <span className="text-[11px] text-black">
+  <span className="text-amber-600 font-bold">⏳</span> Waiting sync
+</span>
 ) : item.syncStatus === "synced" ? (
  <span className="text-[11px] text-black">
   <span className="text-green-600 font-bold">✓</span> Synced
