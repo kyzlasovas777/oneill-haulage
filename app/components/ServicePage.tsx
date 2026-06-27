@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
+import { triggerOneillGlobalSync } from "./oneillGlobalSync"
 
 type ServicePageProps = {
   onBack: () => void
@@ -21,6 +22,7 @@ type ServiceItem = {
   mechanic_bill?: number | null
   description: string | null
   created_at?: string
+  syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
 type ServicePhoto = {
@@ -125,6 +127,7 @@ async function compressImage(file: File): Promise<File> {
 const trucksStorageKey = "oneill-service-trucks"
 const serviceItemsStorageKey = "oneill-service-items"
 const servicePhotosStorageKey = "oneill-service-photos"
+const servicePhotoDeletesStorageKey = "oneill-service-photo-deletes"
 
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -211,23 +214,41 @@ setTrucks(nextTrucks)
 localStorage.setItem(trucksStorageKey, JSON.stringify(nextTrucks))
   }
 
-  const loadAllItems = async () => {
-  const { data, error } = await supabase
-    .from("service_items")
-    .select("*")
+const loadAllItems = async () => {
+  const { data, error } = await supabase.from("service_items").select("*")
 
   if (error) {
     console.log("SERVICE ALL ITEMS LOAD ERROR:", error)
     return
   }
 
-const nextItems = data ?? []
+  const localItems = loadFromStorage<ServiceItem[]>(serviceItemsStorageKey, [])
 
-setAllItems(nextItems)
-localStorage.setItem(
-  serviceItemsStorageKey,
-  JSON.stringify(nextItems)
-)
+  const localPending = localItems.filter(
+    (item) =>
+      item.syncStatus === "pending" || item.syncStatus === "delete_pending"
+  )
+
+  const deletedIds = localPending
+    .filter((item) => item.syncStatus === "delete_pending")
+    .map((item) => item.id)
+
+  const remoteItems: ServiceItem[] = (data ?? []).map((item) => ({
+    ...item,
+    syncStatus: "synced",
+  }))
+
+  const nextItems = [
+    ...remoteItems.filter(
+      (item) =>
+        !deletedIds.includes(item.id) &&
+        !localPending.some((local) => local.id === item.id)
+    ),
+    ...localPending,
+  ]
+
+  setAllItems(nextItems)
+  localStorage.setItem(serviceItemsStorageKey, JSON.stringify(nextItems))
 }
 
 const loadItems = async (truckId: number) => {
@@ -242,29 +263,73 @@ const loadItems = async (truckId: number) => {
     return
   }
 
-  const nextItems = data ?? []
+  const localItems = loadFromStorage<ServiceItem[]>(serviceItemsStorageKey, [])
+
+  const localPending = localItems.filter(
+    (item) =>
+      item.truck_id === truckId &&
+      (item.syncStatus === "pending" || item.syncStatus === "delete_pending")
+  )
+
+  const deletedIds = localPending
+    .filter((item) => item.syncStatus === "delete_pending")
+    .map((item) => item.id)
+
+  const remoteItems: ServiceItem[] = (data ?? []).map((item) => ({
+    ...item,
+    syncStatus: "synced",
+  }))
+
+  const nextItems = [
+    ...remoteItems.filter(
+      (item) =>
+        !deletedIds.includes(item.id) &&
+        !localPending.some((local) => local.id === item.id)
+    ),
+    ...localPending,
+  ]
+
   setItems(nextItems)
 
-  const ids = nextItems.map((item) => item.id)
+  const ids = nextItems
+    .filter((item) => item.syncStatus !== "delete_pending")
+    .map((item) => item.id)
+
+  const localPhotos = loadFromStorage<ServicePhoto[]>(servicePhotosStorageKey, [])
 
   if (ids.length === 0) {
-    setPhotos([])
-    localStorage.setItem(servicePhotosStorageKey, JSON.stringify([]))
+    setPhotos(localPhotos)
+    localStorage.setItem(servicePhotosStorageKey, JSON.stringify(localPhotos))
     return
   }
 
-  const { data: photoData, error: photoError } = await supabase
-    .from("service_photos")
-    .select("*")
-    .in("service_id", ids)
-    .order("created_at", { ascending: false })
+  const remoteIds = ids.filter((id) => id < 1000000000000)
 
-  if (photoError) {
-    console.log("SERVICE PHOTOS LOAD ERROR:", photoError)
-    return
+  let remotePhotos: ServicePhoto[] = []
+
+  if (remoteIds.length > 0) {
+    const { data: photoData, error: photoError } = await supabase
+      .from("service_photos")
+      .select("*")
+      .in("service_id", remoteIds)
+      .order("created_at", { ascending: false })
+
+    if (photoError) {
+      console.log("SERVICE PHOTOS LOAD ERROR:", photoError)
+      return
+    }
+
+    remotePhotos = photoData ?? []
   }
 
-  const nextPhotos = photoData ?? []
+  const localPendingPhotos = localPhotos.filter(
+    (photo) =>
+      ids.includes(photo.service_id) &&
+      (!photo.photo_path || photo.photo_url.startsWith("data:"))
+  )
+
+  const nextPhotos = [...localPendingPhotos, ...remotePhotos]
+
   setPhotos(nextPhotos)
   localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
 }
@@ -273,6 +338,22 @@ useEffect(() => {
   loadTrucks()
   loadAllItems()
 }, [])
+
+useEffect(() => {
+  const handleServiceSynced = () => {
+    loadAllItems()
+
+    if (selectedTruck) {
+      loadItems(selectedTruck.id)
+    }
+  }
+
+  window.addEventListener("oneill-service-synced", handleServiceSynced)
+
+  return () => {
+    window.removeEventListener("oneill-service-synced", handleServiceSynced)
+  }
+}, [selectedTruck])
 
   useEffect(() => {
     if (selectedTruck) {
@@ -308,15 +389,17 @@ useEffect(() => {
     }
   }
 
-  const choosePhotos = (files: FileList | null) => {
-    if (!files) return
+const choosePhotos = (files: FileList | null) => {
+  if (!files) return
 
-    photoPreviews.forEach((url) => URL.revokeObjectURL(url))
+  const selectedFiles = Array.from(files)
+  const selectedPreviews = selectedFiles.map((file) =>
+    URL.createObjectURL(file)
+  )
 
-    const selectedFiles = Array.from(files)
-    setPhotoFiles(selectedFiles)
-    setPhotoPreviews(selectedFiles.map((file) => URL.createObjectURL(file)))
-  }
+  setPhotoFiles((prev) => [...prev, ...selectedFiles])
+  setPhotoPreviews((prev) => [...prev, ...selectedPreviews])
+}
 
   const chooseEditPhotos = (files: FileList | null) => {
     if (!files) return
@@ -356,7 +439,7 @@ useEffect(() => {
     if (editPhotoInputRef.current) editPhotoInputRef.current.value = ""
   }
 
- const saveService = async () => {
+const saveService = async () => {
   if (saving || !selectedTruck) return
 
   if (!mileage && !description && photoFiles.length === 0) {
@@ -375,55 +458,32 @@ useEffect(() => {
 
   setSaving(true)
 
-  const { data, error } = await supabase
-    .from("service_items")
-    .insert({
-      truck_id: selectedTruck.id,
-    entry_date: entryDate,
-      mileage: mileageNumber,
-      parts_cost: partsCostNumber,
-      mechanic_bill: mechanicBillNumber,
-      description: description.trim() || null,
-    })
-    .select()
-    .single()
+  const localId = Date.now()
 
-  if (error || !data) {
-    console.log("SERVICE SAVE ERROR:", error)
-    alert(error?.message ?? "Save error")
-    setSaving(false)
-    return
+  const localItem: ServiceItem = {
+    id: localId,
+    truck_id: selectedTruck.id,
+    entry_date: entryDate,
+    mileage: mileageNumber,
+    parts_cost: partsCostNumber,
+    mechanic_bill: mechanicBillNumber,
+    description: description.trim() || null,
+    created_at: new Date().toISOString(),
+    syncStatus: "pending",
   }
 
-  const savedItem: ServiceItem = data
+  const nextItems = [localItem, ...items]
+  const nextAllItems = [localItem, ...allItems]
 
-  const nextTruckItems = [savedItem, ...items]
-  setItems(nextTruckItems)
-
-  const nextAllItems = [savedItem, ...allItems]
+  setItems(nextItems)
   setAllItems(nextAllItems)
 
-  localStorage.setItem(
-    serviceItemsStorageKey,
-    JSON.stringify(nextAllItems)
-  )
+  localStorage.setItem(serviceItemsStorageKey, JSON.stringify(nextAllItems))
 
-  for (const file of photoFiles) {
-    try {
-      const uploaded = await uploadPhoto(file)
+  const savedPhotoFiles = [...photoFiles]
 
-      await supabase.from("service_photos").insert({
-        service_id: data.id,
-        photo_url: uploaded.photo_url,
-        photo_path: uploaded.photo_path,
-      })
-    } catch (err) {
-      console.log("SERVICE PHOTO SAVE ERROR:", err)
-    }
-  }
-
-setEntryDate(today)
-setEntryDateText(entryDateToUkText(today))
+  setEntryDate(today)
+  setEntryDateText(entryDateToUkText(today))
 
   setMileage("")
   setPartsCost("")
@@ -433,8 +493,46 @@ setEntryDateText(entryDateToUkText(today))
   setAddOpen(false)
   setSaving(false)
 
-  await loadItems(selectedTruck.id)
-  await loadAllItems()
+  setTimeout(async () => {
+    try {
+      if (savedPhotoFiles.length > 0) {
+        const photoRows: ServicePhoto[] = []
+
+        for (let index = 0; index < savedPhotoFiles.length; index++) {
+          const compressedFile = await compressImage(savedPhotoFiles[index])
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(compressedFile)
+          })
+
+          photoRows.push({
+            id: Date.now() + index,
+            service_id: localId,
+            photo_url: base64,
+            photo_path: "",
+            created_at: new Date().toISOString(),
+          })
+        }
+
+        const savedPhotos = loadFromStorage<ServicePhoto[]>(
+          servicePhotosStorageKey,
+          []
+        )
+
+        const nextPhotos = [...photoRows, ...savedPhotos]
+        setPhotos(nextPhotos)
+        localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
+      }
+
+      if (navigator.onLine) {
+        triggerOneillGlobalSync(0)
+      }
+    } catch (error) {
+      console.log("SERVICE BACKGROUND PHOTO SAVE ERROR:", error)
+    }
+  }, 100)
 }
 
 const openEdit = (item: ServiceItem) => {
@@ -477,105 +575,169 @@ const closeEdit = () => {
   clearEditPhotos()
 }
 
-  const saveEditService = async () => {
-    if (editingSaving || !editingItem || !selectedTruck) return
+const saveEditService = async () => {
+  if (editingSaving || !editingItem || !selectedTruck) return
 
-    const mileageNumber = editMileage ? Number(editMileage) : null
-    const partsCostNumber = editPartsCost ? Number(editPartsCost) : 0
-const mechanicBillNumber = editMechanicBill
-  ? Number(editMechanicBill)
-  : 0
+  const mileageNumber = editMileage ? Number(editMileage) : null
+  const partsCostNumber = editPartsCost ? Number(editPartsCost) : 0
+  const mechanicBillNumber = editMechanicBill ? Number(editMechanicBill) : 0
 
-const day = editDay
-const month = editMonth
-const year = editYear
+  const day = editDay
+  const month = editMonth
+  const year = editYear
 
-if (!day || !month || !year || year.length !== 4) {
-  alert("Enter date as DD/MM/YYYY")
-  return
-}
+  if (!day || !month || !year || year.length !== 4) {
+    alert("Enter date as DD/MM/YYYY")
+    return
+  }
 
-const editDateToSave = `${year}.${month}.${day}`
+  const editDateToSave = `${year}.${month}.${day}`
 
-    if (mileageNumber !== null && mileageNumber <= 0) {
-      alert("Mileage must be higher than 0")
-      return
-    }
+  if (mileageNumber !== null && mileageNumber <= 0) {
+    alert("Mileage must be higher than 0")
+    return
+  }
 
-    setEditingSaving(true)
+  setEditingSaving(true)
 
-    const { error } = await supabase
-      .from("service_items")
-     .update({
-  entry_date: editDateToSave,
-  mileage: mileageNumber,
-  parts_cost: partsCostNumber,
-  mechanic_bill: mechanicBillNumber,
-  description: editDescription.trim() || null,
-})
-      .eq("id", editingItem.id)
+  const updatedItem: ServiceItem = {
+    ...editingItem,
+    entry_date: editDateToSave,
+    mileage: mileageNumber,
+    parts_cost: partsCostNumber,
+    mechanic_bill: mechanicBillNumber,
+    description: editDescription.trim() || null,
+    syncStatus: "pending",
+  }
 
-    if (error) {
-      console.log("SERVICE EDIT ERROR:", error)
-      alert("Edit error")
-      setEditingSaving(false)
-      return
-    }
+  const nextItems = items.map((item) =>
+    item.id === editingItem.id ? updatedItem : item
+  )
 
-    for (const file of editPhotoFiles) {
-      try {
-        const uploaded = await uploadPhoto(file)
+  const nextAllItems = allItems.map((item) =>
+    item.id === editingItem.id ? updatedItem : item
+  )
 
-        await supabase.from("service_photos").insert({
-          service_id: editingItem.id,
-          photo_url: uploaded.photo_url,
-          photo_path: uploaded.photo_path,
-        })
-      } catch (err) {
-        console.log("SERVICE EDIT PHOTO ERROR:", err)
+  setItems(nextItems)
+  setAllItems(nextAllItems)
+
+  localStorage.setItem(serviceItemsStorageKey, JSON.stringify(nextAllItems))
+
+  const savedPhotoFiles = [...editPhotoFiles]
+
+  setEditingSaving(false)
+  closeEdit()
+
+  setTimeout(async () => {
+    try {
+      if (savedPhotoFiles.length > 0) {
+        const photoRows: ServicePhoto[] = []
+
+        for (let index = 0; index < savedPhotoFiles.length; index++) {
+          const compressedFile = await compressImage(savedPhotoFiles[index])
+
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(compressedFile)
+          })
+
+          photoRows.push({
+            id: Date.now() + index,
+            service_id: editingItem.id,
+            photo_url: base64,
+            photo_path: "",
+            created_at: new Date().toISOString(),
+          })
+        }
+
+        const savedPhotos = loadFromStorage<ServicePhoto[]>(
+          servicePhotosStorageKey,
+          []
+        )
+
+        const nextPhotos = [...photoRows, ...savedPhotos]
+        setPhotos(nextPhotos)
+        localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
       }
+
+      if (navigator.onLine) {
+        triggerOneillGlobalSync(0)
+      }
+    } catch (error) {
+      console.log("SERVICE EDIT BACKGROUND PHOTO SAVE ERROR:", error)
     }
-
-    setEditingSaving(false)
-    closeEdit()
-    await loadItems(selectedTruck.id)
-  }
-
-  const deleteServicePhoto = async (photo: ServicePhoto) => {
-    if (!confirm("Delete this photo?")) return
-
-    if (photo.photo_path) {
-      await supabase.storage.from("entry-photos").remove([photo.photo_path])
-    }
-
-    await supabase.from("service_photos").delete().eq("id", photo.id)
-
-    if (selectedTruck) await loadItems(selectedTruck.id)
-  }
-
-  const deleteServiceItem = async (id: number) => {
-    if (!confirm("Delete this service?")) return
-
-    const itemPhotos = photos.filter((photo) => photo.service_id === id)
-    const paths = itemPhotos
-      .map((photo) => photo.photo_path)
-      .filter(Boolean) as string[]
-
-    if (paths.length > 0) {
-      await supabase.storage.from("entry-photos").remove(paths)
-    }
-
-    await supabase.from("service_photos").delete().eq("service_id", id)
-    await supabase.from("service_items").delete().eq("id", id)
-
-    closeEdit()
-
-  if (selectedTruck) {
-  await loadItems(selectedTruck.id)
+  }, 100)
 }
 
-await loadAllItems()
+const deleteServicePhoto = async (photo: ServicePhoto) => {
+  if (!confirm("Delete this photo?")) return
+
+  const nextPhotos = photos.filter((item) => item.id !== photo.id)
+  setPhotos(nextPhotos)
+  localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
+
+  if (photo.photo_path && !photo.photo_url.startsWith("data:")) {
+    const savedDeletes = loadFromStorage<ServicePhoto[]>(
+      servicePhotoDeletesStorageKey,
+      []
+    )
+
+    const nextDeletes = [photo, ...savedDeletes]
+
+    localStorage.setItem(
+      servicePhotoDeletesStorageKey,
+      JSON.stringify(nextDeletes)
+    )
   }
+
+  if (navigator.onLine) {
+    triggerOneillGlobalSync(0)
+  }
+}
+
+const deleteServiceItem = async (id: number) => {
+  if (!confirm("Delete this service?")) return
+
+  const itemToDelete = items.find((item) => item.id === id)
+
+  const nextItems =
+    itemToDelete?.syncStatus === "pending" && id > 1000000000000
+      ? items.filter((item) => item.id !== id)
+      : items.map((item) =>
+          item.id === id
+            ? { ...item, syncStatus: "delete_pending" as const }
+            : item
+        )
+
+  const nextAllItems =
+    itemToDelete?.syncStatus === "pending" && id > 1000000000000
+      ? allItems.filter((item) => item.id !== id)
+      : allItems.map((item) =>
+          item.id === id
+            ? { ...item, syncStatus: "delete_pending" as const }
+            : item
+        )
+
+  const nextPhotos =
+    itemToDelete?.syncStatus === "pending" && id > 1000000000000
+      ? photos.filter((photo) => photo.service_id !== id)
+      : photos
+
+  setItems(nextItems)
+  setAllItems(nextAllItems)
+  setPhotos(nextPhotos)
+
+  localStorage.setItem(serviceItemsStorageKey, JSON.stringify(nextAllItems))
+  localStorage.setItem(servicePhotosStorageKey, JSON.stringify(nextPhotos))
+
+  closeEdit()
+
+  if (navigator.onLine) {
+    triggerOneillGlobalSync(0)
+  }
+}
 
 const currentYear = new Date().getFullYear()
 
@@ -778,13 +940,28 @@ const count = allItems.filter((item) => {
               <button
                 key={item.id}
                 onClick={() => openEdit(item)}
-                className="w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-2 shadow-sm"
+             className="relative w-full text-left bg-[#f5f5f5] rounded-[18px] border border-green-400 px-3 py-2 shadow-sm"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="pl-2">
-                 <div className="text-center text-[14px] text-zinc-500 font-semibold mb-1">
-  {displayDate(item.entry_date)}
+<div className="flex items-center justify-between mb-2">
+  <div className="flex-1 text-center text-[14px] text-zinc-500 font-semibold">
+    {displayDate(item.entry_date)}
+  </div>
+
+  <div className="absolute right-4">
+   {item.syncStatus === "pending" ? (
+  <span className="text-[13px] text-amber-600 font-semibold">
+    ⌛ Waiting sync
+  </span>
+) : item.syncStatus === "synced" ? (
+ <span className="text-[11px] text-black">
+  <span className="text-green-600 font-bold">✓</span> Synced
+</span>
+) : null}
+  </div>
 </div>
+
+<div className="flex items-start justify-between gap-3">
+  <div className="pl-2">
 
 <div className="space-y-2 mb-3 text-[15px]">
   <div className="flex">

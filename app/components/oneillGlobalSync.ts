@@ -39,6 +39,26 @@ type MileageEntry = {
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
+type ServiceItem = {
+  id: number
+  truck_id: number
+  entry_date: string
+  mileage: number | null
+  parts_cost?: number | null
+  mechanic_bill?: number | null
+  description: string | null
+  created_at?: string
+  syncStatus?: "synced" | "pending" | "delete_pending"
+}
+
+type ServicePhoto = {
+  id: number
+  service_id: number
+  photo_url: string
+  photo_path: string | null
+  created_at?: string
+}
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
 
@@ -89,6 +109,65 @@ async function uploadDieselPhoto(driverId: number, file: File) {
     photo_url: data.publicUrl,
     photo_path: filePath,
   }
+}
+
+async function uploadServicePhoto(file: File) {
+  const cleanName = file.name.replaceAll(" ", "-")
+
+  const filePath = `service/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}-${cleanName}`
+
+  const { error } = await supabase.storage
+    .from("entry-photos")
+    .upload(filePath, file, {
+      contentType: "image/jpeg",
+    })
+
+  if (error) throw error
+
+  const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
+
+  return {
+    photo_url: data.publicUrl,
+    photo_path: filePath,
+  }
+}
+
+async function uploadLocalServicePhotosForEntry(
+  oldServiceId: number,
+  realServiceId: number,
+  localPhotos: ServicePhoto[]
+) {
+  const entryLocalPhotos = localPhotos.filter(
+    (photo) =>
+      photo.service_id === oldServiceId &&
+      (!photo.photo_path || photo.photo_url.startsWith("data:"))
+  )
+
+  if (entryLocalPhotos.length === 0) return []
+
+  const insertedPhotos: ServicePhoto[] = []
+
+  for (const photo of entryLocalPhotos) {
+    const file = dataUrlToFile(photo.photo_url, `service-${photo.id}.jpg`)
+    const uploaded = await uploadServicePhoto(file)
+
+    const { data, error } = await supabase
+      .from("service_photos")
+      .insert({
+        service_id: realServiceId,
+        photo_url: uploaded.photo_url,
+        photo_path: uploaded.photo_path,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    if (data) insertedPhotos.push(data)
+  }
+
+  return insertedPhotos
 }
 
 async function uploadLocalDieselPhotosForEntry(
@@ -428,6 +507,193 @@ async function syncMileageEntriesGlobal(driverId: number) {
   console.log("GLOBAL MILES SYNC: finished")
 }
 
+async function syncServiceEntriesGlobal() {
+  const serviceItemsStorageKey = "oneill-service-items"
+  const servicePhotosStorageKey = "oneill-service-photos"
+  const servicePhotoDeletesStorageKey = "oneill-service-photo-deletes"
+
+  let localItems = loadFromStorage<ServiceItem[]>(serviceItemsStorageKey, [])
+  let localPhotos = loadFromStorage<ServicePhoto[]>(servicePhotosStorageKey, [])
+  let localPhotoDeletes = loadFromStorage<ServicePhoto[]>(
+    servicePhotoDeletesStorageKey,
+    []
+  )
+
+  const hasServiceWork =
+    localItems.some(
+      (item) =>
+        item.syncStatus === "pending" ||
+        item.syncStatus === "delete_pending"
+    ) || localPhotoDeletes.length > 0
+
+  if (!hasServiceWork) {
+    console.log("GLOBAL SERVICE SYNC: nothing pending")
+    return
+  }
+
+  console.log("GLOBAL SERVICE SYNC: started")
+
+  for (const photo of localPhotoDeletes) {
+    if (photo.photo_path) {
+      await supabase.storage.from("entry-photos").remove([photo.photo_path])
+    }
+
+    await supabase.from("service_photos").delete().eq("id", photo.id)
+
+    localPhotoDeletes = localPhotoDeletes.filter((item) => item.id !== photo.id)
+
+    localStorage.setItem(
+      servicePhotoDeletesStorageKey,
+      JSON.stringify(localPhotoDeletes)
+    )
+  }
+
+  for (const item of localItems) {
+    if (item.syncStatus === "delete_pending") {
+      if (!isLocalId(item.id)) {
+        const itemPhotos = localPhotos.filter(
+          (photo) => photo.service_id === item.id && photo.photo_path
+        )
+
+        const paths = itemPhotos
+          .map((photo) => photo.photo_path)
+          .filter(Boolean) as string[]
+
+        if (paths.length > 0) {
+          await supabase.storage.from("entry-photos").remove(paths)
+        }
+
+        await supabase.from("service_photos").delete().eq("service_id", item.id)
+        await supabase.from("service_items").delete().eq("id", item.id)
+      }
+
+      localItems = localItems.filter((entry) => entry.id !== item.id)
+      localPhotos = localPhotos.filter((photo) => photo.service_id !== item.id)
+
+      localStorage.setItem(serviceItemsStorageKey, JSON.stringify(localItems))
+      localStorage.setItem(servicePhotosStorageKey, JSON.stringify(localPhotos))
+
+      continue
+    }
+
+    if (item.syncStatus === "pending") {
+      if (isLocalId(item.id)) {
+        const oldLocalId = item.id
+
+        const { data, error } = await supabase
+          .from("service_items")
+          .insert({
+            truck_id: item.truck_id,
+            entry_date: item.entry_date,
+            mileage: item.mileage,
+            parts_cost: item.parts_cost ?? 0,
+            mechanic_bill: item.mechanic_bill ?? 0,
+            description: item.description,
+          })
+          .select()
+          .single()
+
+        if (error || !data) throw error
+
+        const itemWithRealId: ServiceItem = {
+          ...data,
+          syncStatus: "pending",
+        }
+
+        localItems = localItems.map((entry) =>
+          entry.id === oldLocalId ? itemWithRealId : entry
+        )
+
+        localPhotos = localPhotos.map((photo) =>
+          photo.service_id === oldLocalId
+            ? { ...photo, service_id: data.id }
+            : photo
+        )
+
+        localStorage.setItem(serviceItemsStorageKey, JSON.stringify(localItems))
+        localStorage.setItem(servicePhotosStorageKey, JSON.stringify(localPhotos))
+
+        const insertedPhotos = await uploadLocalServicePhotosForEntry(
+          data.id,
+          data.id,
+          localPhotos
+        )
+
+        localPhotos = [
+          ...insertedPhotos,
+          ...localPhotos.filter(
+            (photo) =>
+              !(
+                photo.service_id === data.id &&
+                (!photo.photo_path || photo.photo_url.startsWith("data:"))
+              )
+          ),
+        ]
+
+        const syncedItem: ServiceItem = {
+          ...data,
+          syncStatus: "synced",
+        }
+
+        localItems = localItems.map((entry) =>
+          entry.id === data.id ? syncedItem : entry
+        )
+
+        localStorage.setItem(serviceItemsStorageKey, JSON.stringify(localItems))
+        localStorage.setItem(servicePhotosStorageKey, JSON.stringify(localPhotos))
+      } else {
+        const { data, error } = await supabase
+          .from("service_items")
+          .update({
+            entry_date: item.entry_date,
+            mileage: item.mileage,
+            parts_cost: item.parts_cost ?? 0,
+            mechanic_bill: item.mechanic_bill ?? 0,
+            description: item.description,
+          })
+          .eq("id", item.id)
+          .select()
+          .single()
+
+        if (error || !data) throw error
+
+        const insertedPhotos = await uploadLocalServicePhotosForEntry(
+          item.id,
+          item.id,
+          localPhotos
+        )
+
+        localPhotos = [
+          ...insertedPhotos,
+          ...localPhotos.filter(
+            (photo) =>
+              !(
+                photo.service_id === item.id &&
+                (!photo.photo_path || photo.photo_url.startsWith("data:"))
+              )
+          ),
+        ]
+
+        const syncedItem: ServiceItem = {
+          ...data,
+          syncStatus: "synced",
+        }
+
+        localItems = localItems.map((entry) =>
+          entry.id === item.id ? syncedItem : entry
+        )
+
+        localStorage.setItem(serviceItemsStorageKey, JSON.stringify(localItems))
+        localStorage.setItem(servicePhotosStorageKey, JSON.stringify(localPhotos))
+      }
+    }
+  }
+
+  window.dispatchEvent(new CustomEvent("oneill-service-synced"))
+
+  console.log("GLOBAL SERVICE SYNC: finished")
+}
+
 async function runSync(driverId: number) {
   if (!navigator.onLine) {
     console.log("GLOBAL SYNC: offline")
@@ -447,6 +713,8 @@ async function runSync(driverId: number) {
     await syncDieselEntriesGlobal(driverId)
 
     await syncMileageEntriesGlobal(driverId)
+
+    await syncServiceEntriesGlobal()
 
     console.log("GLOBAL SYNC: finished")
   } catch (error) {

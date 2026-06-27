@@ -1260,9 +1260,9 @@ const visibleEntries = isArchiveMode
     ? "⏳ Waiting sync"
     : entry.syncStatus === "synced"
     ? (
-      <>
-        <span className="text-green-600 font-bold">&#10003;</span> Synced
-      </>
+  <span className="text-[11px] text-black">
+  <span className="text-green-600 font-bold">&#10003;</span> Synced
+</span>
     )
     : ""}
 </div>
