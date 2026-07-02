@@ -1001,7 +1001,7 @@ const count = allItems.filter((item) => {
                   </div>
 
                   {itemPhotos.length > 0 && (
-                 <div className="grid grid-cols-2 gap-1 mt-2">
+  <div className="grid grid-cols-2 gap-2 mt-2 w-[130px] shrink-0">
   {itemPhotos.map((photo) => (
     <img
       key={photo.id}
@@ -1011,7 +1011,7 @@ const count = allItems.filter((item) => {
         e.stopPropagation()
         setOpenPhoto(photo.photo_url)
       }}
-      className="h-[46px] w-[46px] rounded-[9px] object-cover"
+      className="aspect-square w-full rounded-[9px] object-cover"
     />
   ))}
 </div>
@@ -1169,7 +1169,7 @@ setAddOpen(true)
                           e.stopPropagation()
                           removePhoto(index)
                         }}
-                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
                       >
                         ×
                       </button>
@@ -1319,7 +1319,7 @@ setAddOpen(true)
 
               <div className="flex gap-2 overflow-x-auto pt-3 pb-1">
                 {getItemPhotos(editingItem.id).map((photo) => (
-                  <div key={photo.id} className="relative shrink-0">
+                <div key={photo.id} className="relative shrink-0 pt-2 pr-2">
                     <img
                       src={photo.photo_url}
                       alt="Service"
@@ -1341,7 +1341,7 @@ setAddOpen(true)
                 ))}
 
                 {editPhotoPreviews.map((preview, index) => (
-                  <div key={preview} className="relative shrink-0">
+                  <div key={preview} className="relative shrink-0 pt-5 pr-5">
                     <img
                       src={preview}
                       alt="Preview"
@@ -1355,7 +1355,7 @@ setAddOpen(true)
                         e.stopPropagation()
                         removeEditPhoto(index)
                       }}
-                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
+                      className="absolute top-0 right-0 h-5 w-5 rounded-full bg-red-600 text-white text-[11px] font-bold"
                     >
                       ×
                     </button>
