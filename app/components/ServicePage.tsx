@@ -1001,7 +1001,7 @@ const count = allItems.filter((item) => {
                   </div>
 
                   {itemPhotos.length > 0 && (
-                 <div className="grid grid-cols-3 gap-1 mt-2">
+                 <div className="grid grid-cols-2 gap-1 mt-2">
   {itemPhotos.map((photo) => (
     <img
       key={photo.id}
