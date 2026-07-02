@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import { triggerOneillGlobalSync } from "./oneillGlobalSync"
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch"
 
 type ServicePageProps = {
   onBack: () => void
@@ -1450,11 +1451,25 @@ setAddOpen(true)
           onClick={() => setOpenPhoto(null)}
           className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4"
         >
-          <img
-            src={openPhoto}
-            alt="Service"
-            className="max-h-full max-w-full rounded-[16px]"
-          />
+      
+  <TransformWrapper
+  initialScale={1}
+  minScale={1}
+  maxScale={4}
+  centerOnInit
+  doubleClick={{ disabled: true }}
+>
+  <TransformComponent
+    wrapperClass="!w-screen !h-screen"
+    contentClass="!w-screen !h-screen flex items-center justify-center"
+  >
+    <img
+      src={openPhoto}
+      alt="Service"
+      className="max-w-full max-h-full object-contain"
+    />
+  </TransformComponent>
+</TransformWrapper>
         </div>
       )}
     </div>
