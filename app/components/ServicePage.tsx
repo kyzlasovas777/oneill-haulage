@@ -1001,20 +1001,20 @@ const count = allItems.filter((item) => {
                   </div>
 
                   {itemPhotos.length > 0 && (
-                    <div className="flex gap-1 shrink-0">
-                      {itemPhotos.map((photo) => (
-                        <img
-                          key={photo.id}
-                          src={photo.photo_url}
-                          alt="Service"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenPhoto(photo.photo_url)
-                          }}
-                          className="h-[46px] w-[46px] rounded-[9px] object-cover"
-                        />
-                      ))}
-                    </div>
+                 <div className="grid grid-cols-3 gap-1 mt-2">
+  {itemPhotos.map((photo) => (
+    <img
+      key={photo.id}
+      src={photo.photo_url}
+      alt="Service"
+      onClick={(e) => {
+        e.stopPropagation()
+        setOpenPhoto(photo.photo_url)
+      }}
+      className="h-[46px] w-[46px] rounded-[9px] object-cover"
+    />
+  ))}
+</div>
                   )}
                 </div>
               </button>
