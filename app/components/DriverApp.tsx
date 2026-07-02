@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import MilesPage from "./MilesPage"
 import DieselPage from "./DieselPage"
-import * as XLSX from "xlsx"
+import * as XLSX from "xlsx-js-style"
 import { startOneillGlobalSync } from "./oneillGlobalSync"
 
 type Entry = {
@@ -657,6 +657,27 @@ visibleEntries.forEach((entry, index) => {
 })
 
   const worksheet = XLSX.utils.json_to_sheet(rows)
+
+  const range = XLSX.utils.decode_range(worksheet["!ref"]!)
+
+for (let R = range.s.r; R <= range.e.r; ++R) {
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const cell = XLSX.utils.encode_cell({ r: R, c: C })
+
+    if (!worksheet[cell]) continue
+
+    worksheet[cell].s = {
+  font: {
+    name: "Arial",
+    sz: 18,
+  },
+  alignment: {
+    horizontal: C === 5 ? "center" : "left",
+    vertical: "center",
+  },
+}
+  }
+}
 
   worksheet["!cols"] = [
     { wch: 14 },
