@@ -1002,7 +1002,7 @@ const count = allItems.filter((item) => {
 
                   {itemPhotos.length > 0 && (
                     <div className="flex gap-1 shrink-0">
-                      {itemPhotos.slice(0, 3).map((photo) => (
+                      {itemPhotos.map((photo) => (
                         <img
                           key={photo.id}
                           src={photo.photo_url}
