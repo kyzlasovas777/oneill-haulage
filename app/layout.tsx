@@ -17,7 +17,9 @@ export const metadata: Metadata = {
   description: "Driver App",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon-512.png",
+    icon: [
+      { url: "/icon.clear.png", sizes: "1024x1024", type: "image/png" },
+    ],
     apple: "/apple-touch-icon.png",
   },
 };
