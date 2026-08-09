@@ -1,4 +1,4 @@
-const CACHE_NAME = "oneill-haulage-v4"
+const CACHE_NAME = "oneill-haulage-v5"
 const APP_SHELL = [
   "/",
   "/manifest.json",

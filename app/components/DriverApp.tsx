@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import MilesPage from "./MilesPage"
 import DieselPage from "./DieselPage"
+import DailyCheckPage from "./DailyCheckPage"
 import * as XLSX from "xlsx-js-style"
 import { startOneillGlobalSync } from "./oneillGlobalSync"
 
@@ -166,7 +167,8 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
   "archives" |
   "archive" |
   "miles" |
-  "diesel"
+  "diesel" |
+  "dailyCheck"
 >("main")
 
   const [activeArchiveId, setActiveArchiveId] = useState<number | null>(null)
@@ -1126,6 +1128,13 @@ className={
     isBoss={isBoss}
   />
 )}
+
+{screen === "dailyCheck" && (
+  <DailyCheckPage
+    driverId={driverId}
+    onBack={() => setScreen("main")}
+  />
+)}
 {screen === "archives" ? (
   <div className="flex-1 px-3 overflow-y-auto pb-[90px]">
     <div className="space-y-1">
@@ -1303,6 +1312,17 @@ Add Place
 >
   <span className="w-6 text-center text-[22px]">⛽</span>
   Diesel
+</button>
+
+<button
+  onClick={() => {
+    setScreen("dailyCheck")
+    setShowMainMenu(false)
+  }}
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+>
+  <span className="w-6 text-center text-[22px]">✅</span>
+  Daily Check
 </button>
 
 {isBoss && screen === "main" && (
@@ -1649,4 +1669,3 @@ Add Place
     </main>
   )
 }
-
