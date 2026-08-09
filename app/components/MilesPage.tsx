@@ -411,8 +411,15 @@ const saveStartMileage = async () => {
     }
 
     if (data) {
+      const syncedEntry: MileageEntry = {
+        ...data,
+        syncStatus: "synced",
+      }
+
       setEntries((prev) =>
-        prev.map((entry) => (entry.id === data.id ? data : entry))
+        prev.map((entry) =>
+          entry.id === syncedEntry.id ? syncedEntry : entry
+        )
       )
     }
 
