@@ -49,6 +49,10 @@ export default function Home() {
 
   if (screen === "login") {
     return (
+      <>
+      <div className="fixed top-1 right-2 z-[200] rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+        TEST
+      </div>
       <LoginScreen
         onDriverLogin={(driver) => {
           localStorage.setItem("lastDriver", JSON.stringify(driver))
@@ -62,11 +66,16 @@ export default function Home() {
           setScreen("admin")
         }}
       />
+      </>
     )
   }
 
   if (screen === "admin") {
     return (
+      <>
+      <div className="fixed top-1 right-2 z-[200] rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+        TEST
+      </div>
       <BossDashboard
         onLogout={logout}
         onOpenDriver={(driver) => {
@@ -75,10 +84,15 @@ export default function Home() {
           setScreen("driver")
         }}
       />
+      </>
     )
   }
 
   return (
+    <>
+    <div className="fixed top-1 right-2 z-[200] rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+      TEST
+    </div>
     <DriverApp
       driverId={activeDriver?.id ?? 0}
       driverName={activeDriver?.name ?? ""}
@@ -91,5 +105,6 @@ export default function Home() {
         }
       }}
     />
+    </>
   )
 }

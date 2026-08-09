@@ -61,6 +61,42 @@ type ServicePhoto = {
   created_at?: string
 }
 
+type DailyCheckAnswer = {
+  questionId: string
+  answer: boolean
+}
+
+type DailyCheckDefect = {
+  questionId: string
+  question: string
+  description: string
+  safeToDrive: boolean
+}
+
+type DailyCheckEntry = {
+  id: number
+  driver_id: number
+  entry_date: string
+  checked_at: string
+  reg_number: string
+  status: "no_defects" | "defect_reported"
+  safe_to_drive: boolean
+  answers: DailyCheckAnswer[]
+  defects: DailyCheckDefect[]
+  created_at?: string
+  syncStatus?: "synced" | "pending"
+}
+
+type DailyCheckPhoto = {
+  id: number
+  daily_check_id: number
+  driver_id: number
+  question_id: string
+  photo_url: string
+  photo_path: string | null
+  created_at?: string
+}
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
 
@@ -134,6 +170,66 @@ async function uploadServicePhoto(file: File) {
     photo_url: data.publicUrl,
     photo_path: filePath,
   }
+}
+
+async function uploadDailyCheckPhoto(driverId: number, file: File) {
+  const cleanName = file.name.replaceAll(" ", "-")
+  const filePath = `daily-check/${driverId}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}-${cleanName}`
+
+  const { error } = await supabase.storage
+    .from("entry-photos")
+    .upload(filePath, file, {
+      contentType: "image/jpeg",
+    })
+
+  if (error) throw error
+
+  const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
+
+  return {
+    photo_url: data.publicUrl,
+    photo_path: filePath,
+  }
+}
+
+async function uploadLocalDailyCheckPhotos(
+  driverId: number,
+  checkId: number,
+  localPhotos: DailyCheckPhoto[]
+) {
+  const photosToUpload = localPhotos.filter(
+    (photo) =>
+      photo.daily_check_id === checkId &&
+      (!photo.photo_path || photo.photo_url.startsWith("data:"))
+  )
+
+  if (photosToUpload.length === 0) return []
+
+  const insertedPhotos: DailyCheckPhoto[] = []
+
+  for (const photo of photosToUpload) {
+    const file = dataUrlToFile(photo.photo_url, `daily-check-${photo.id}.jpg`)
+    const uploaded = await uploadDailyCheckPhoto(driverId, file)
+
+    const { data, error } = await supabase
+      .from("daily_check_photos")
+      .insert({
+        daily_check_id: checkId,
+        driver_id: driverId,
+        question_id: photo.question_id,
+        photo_url: uploaded.photo_url,
+        photo_path: uploaded.photo_path,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    if (data) insertedPhotos.push(data)
+  }
+
+  return insertedPhotos
 }
 
 async function uploadLocalServicePhotosForEntry(
@@ -509,6 +605,140 @@ async function syncMileageEntriesGlobal(driverId: number) {
   console.log("GLOBAL MILES SYNC: finished")
 }
 
+async function syncDailyChecksGlobal(driverId: number) {
+  const entriesStorageKey = `oneill-daily-check-entries-${driverId}`
+  const photosStorageKey = `oneill-daily-check-photos-${driverId}`
+
+  let localEntries = loadFromStorage<DailyCheckEntry[]>(entriesStorageKey, [])
+  let localPhotos = loadFromStorage<DailyCheckPhoto[]>(photosStorageKey, [])
+
+  const hasPendingChecks = localEntries.some(
+    (entry) => entry.syncStatus === "pending"
+  )
+
+  if (!hasPendingChecks) {
+    console.log("GLOBAL DAILY CHECK SYNC: nothing pending")
+    return
+  }
+
+  console.log("GLOBAL DAILY CHECK SYNC: started")
+
+  for (const entry of localEntries) {
+    if (entry.syncStatus !== "pending") continue
+
+    if (isLocalId(entry.id)) {
+      const oldLocalId = entry.id
+      const { data, error } = await supabase
+        .from("daily_checks")
+        .insert({
+          driver_id: driverId,
+          entry_date: entry.entry_date,
+          checked_at: entry.checked_at,
+          reg_number: entry.reg_number,
+          status: entry.status,
+          safe_to_drive: entry.safe_to_drive,
+          answers: entry.answers,
+          defects: entry.defects,
+        })
+        .select()
+        .single()
+
+      if (error || !data) throw error
+
+      const entryWithRealId: DailyCheckEntry = {
+        ...data,
+        answers: data.answers ?? [],
+        defects: data.defects ?? [],
+        syncStatus: "pending",
+      }
+
+      localEntries = localEntries.map((item) =>
+        item.id === oldLocalId ? entryWithRealId : item
+      )
+      localPhotos = localPhotos.map((photo) =>
+        photo.daily_check_id === oldLocalId
+          ? { ...photo, daily_check_id: data.id }
+          : photo
+      )
+
+      localStorage.setItem(entriesStorageKey, JSON.stringify(localEntries))
+      localStorage.setItem(photosStorageKey, JSON.stringify(localPhotos))
+
+      const insertedPhotos = await uploadLocalDailyCheckPhotos(
+        driverId,
+        data.id,
+        localPhotos
+      )
+
+      localPhotos = [
+        ...insertedPhotos,
+        ...localPhotos.filter(
+          (photo) =>
+            !(
+              photo.daily_check_id === data.id &&
+              (!photo.photo_path || photo.photo_url.startsWith("data:"))
+            )
+        ),
+      ]
+
+      localEntries = localEntries.map((item) =>
+        item.id === data.id ? { ...entryWithRealId, syncStatus: "synced" } : item
+      )
+    } else {
+      const { data, error } = await supabase
+        .from("daily_checks")
+        .update({
+          entry_date: entry.entry_date,
+          checked_at: entry.checked_at,
+          reg_number: entry.reg_number,
+          status: entry.status,
+          safe_to_drive: entry.safe_to_drive,
+          answers: entry.answers,
+          defects: entry.defects,
+        })
+        .eq("id", entry.id)
+        .select()
+        .single()
+
+      if (error || !data) throw error
+
+      const insertedPhotos = await uploadLocalDailyCheckPhotos(
+        driverId,
+        entry.id,
+        localPhotos
+      )
+
+      localPhotos = [
+        ...insertedPhotos,
+        ...localPhotos.filter(
+          (photo) =>
+            !(
+              photo.daily_check_id === entry.id &&
+              (!photo.photo_path || photo.photo_url.startsWith("data:"))
+            )
+        ),
+      ]
+
+      localEntries = localEntries.map((item) =>
+        item.id === entry.id
+          ? {
+              ...data,
+              answers: data.answers ?? [],
+              defects: data.defects ?? [],
+              syncStatus: "synced",
+            }
+          : item
+      )
+    }
+
+    localStorage.setItem(entriesStorageKey, JSON.stringify(localEntries))
+    localStorage.setItem(photosStorageKey, JSON.stringify(localPhotos))
+  }
+
+  window.dispatchEvent(new CustomEvent("oneill-daily-check-synced"))
+  console.log("GLOBAL DAILY CHECK SYNC: finished")
+}
+
 async function syncServiceEntriesGlobal() {
   const serviceItemsStorageKey = "oneill-service-items"
   const servicePhotosStorageKey = "oneill-service-photos"
@@ -718,6 +948,8 @@ async function runSync(driverId: number) {
     await syncMileageEntriesGlobal(driverId)
 
     await syncServiceEntriesGlobal()
+
+    await syncDailyChecksGlobal(driverId)
 
     console.log("GLOBAL SYNC: finished")
   } catch (error) {

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "O'Neill Haulage",
-  description: "Driver App",
+  title: "O'Neill TEST",
+  description: "O'Neill Haulage test app",
   manifest: "/manifest.json",
   icons: {
     icon: [

@@ -1,7 +1,7 @@
 {
-  "name": "O'Neill Haulage",
-  "short_name": "O'Neill",
-  "description": "O'Neill Haulage driver app",
+  "name": "O'Neill TEST",
+  "short_name": "O'Neill TEST",
+  "description": "O'Neill Haulage test app",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#efeff4",
