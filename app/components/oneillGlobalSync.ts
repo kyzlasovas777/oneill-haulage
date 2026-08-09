@@ -3,6 +3,7 @@ import { supabase } from "./supabase"
 let globalSyncStarted = false
 let syncRunning = false
 const queuedSyncDriverIds = new Set<number>()
+let mileageSyncQueue = Promise.resolve()
 
 type DieselEntry = {
   id: number
