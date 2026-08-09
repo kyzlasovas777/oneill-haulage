@@ -137,10 +137,14 @@ const [entries, setEntries] = useState<MileageEntry[]>(() =>
   const today = formatEntryDate(new Date())
   const currentWeekTitle = getWeekTitle(today)
 
-  const todayEntry = entries.find((entry) => entry.entry_date === today)
+  const todayEntry = entries.find(
+    (entry) =>
+      entry.entry_date === today &&
+      entry.finish_mileage === null &&
+      entry.syncStatus !== "delete_pending"
+  )
   const needsStart = !todayEntry
-  const needsFinish = todayEntry && todayEntry.finish_mileage === null
-  const todayCompleted = todayEntry && todayEntry.finish_mileage !== null
+  const needsFinish = !!todayEntry
 
  const loadMileageEntries = async () => {
   if (!navigator.onLine) return
@@ -792,15 +796,13 @@ const visibleTotal = visibleEntries.reduce(
                   Cancel
                 </button>
 
-                {!todayCompleted && (
-                  <button
-                    type="button"
-                    onClick={saveAddMileage}
-                    className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
-                  >
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={saveAddMileage}
+                  className="flex-1 h-[46px] rounded-[14px] bg-blue-600 text-white font-bold"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
               </div>
             </div>
           </div>
