@@ -389,41 +389,29 @@ const saveStartMileage = async () => {
 
     setSaving(true)
 
-    const { data, error } = await supabase
-      .from("mileage_entries")
-      .update({
-        finish_mileage: finish,
-        total_miles: total,
-        reg_number: mileageReg || null,
-        avg_l100: avgL100,
-        estimated_litres: estimatedLitres,
-      })
-      .eq("id", todayEntry.id)
-      .select()
-      .single()
+    const pendingEntry: MileageEntry = {
+      ...todayEntry,
+      finish_mileage: finish,
+      total_miles: total,
+      reg_number: mileageReg || null,
+      avg_l100: avgL100,
+      estimated_litres: estimatedLitres,
+      syncStatus: "pending",
+    }
+
+    const nextEntries = entries.map((entry) =>
+      entry.id === todayEntry.id ? pendingEntry : entry
+    )
+
+    setEntries(nextEntries)
+    localStorage.setItem(mileageStorageKey, JSON.stringify(nextEntries))
 
     setSaving(false)
-
-    if (error) {
-      console.log("MILEAGE FINISH SAVE ERROR:", error)
-      alert("Mileage save error")
-      return
-    }
-
-    if (data) {
-      const syncedEntry: MileageEntry = {
-        ...data,
-        syncStatus: "synced",
-      }
-
-      setEntries((prev) =>
-        prev.map((entry) =>
-          entry.id === syncedEntry.id ? syncedEntry : entry
-        )
-      )
-    }
-
     closeAdd()
+
+    if (navigator.onLine) {
+      triggerOneillGlobalSync(driverId)
+    }
   }
 
   const saveAddMileage = async () => {
