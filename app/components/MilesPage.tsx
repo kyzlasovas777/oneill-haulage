@@ -94,6 +94,16 @@ function normaliseReg(reg: string | null | undefined) {
   return (reg ?? "").trim().toUpperCase()
 }
 
+function compareMileageEntries(a: MileageEntry, b: MileageEntry) {
+  const dateOrder = a.entry_date.localeCompare(b.entry_date)
+  if (dateOrder !== 0) return dateOrder
+
+  const createdOrder = (a.created_at ?? "").localeCompare(b.created_at ?? "")
+  if (createdOrder !== 0) return createdOrder
+
+  return a.id - b.id
+}
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
 
@@ -519,7 +529,7 @@ if (navigator.onLine) {
 }
   const currentWeekEntries = entries
     .filter((entry) => getWeekTitle(entry.entry_date) === currentWeekTitle)
-    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+    .sort(compareMileageEntries)
 
   const weekTotal = currentWeekEntries.reduce(
     (sum, entry) => sum + (entry.total_miles ?? 0),
@@ -542,9 +552,7 @@ const isArchiveList = archiveOpen && !activeArchiveWeek
   const visibleArchiveEntries = activeArchiveWeek
 
 
-    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort((a, b) =>
-        a.entry_date.localeCompare(b.entry_date)
-      )
+    ? [...(archiveWeeks[activeArchiveWeek] ?? [])].sort(compareMileageEntries)
     : []
 
     const isArchiveMode = !!activeArchiveWeek
