@@ -55,7 +55,7 @@ type DraftPhoto = {
   dataUrl: string
 }
 
-const DAILY_CHECK_QUESTIONS = [
+export const DAILY_CHECK_QUESTIONS = [
   {
     id: "visibility",
     text: "Are the windows and mirrors clean, undamaged and correctly adjusted?",
@@ -418,20 +418,57 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
     setQuestionIndex((current) => current + 1)
   }
 
+  const replaceAnswer = (questionId: string, answer: boolean) => {
+    setAnswers((current) => [
+      ...current.filter((item) => item.questionId !== questionId),
+      { questionId, answer },
+    ])
+  }
+
+  const goToPreviousQuestion = () => {
+    if (questionIndex === 0) {
+      setSelectedReg("")
+      return
+    }
+
+    setQuestionIndex((current) => current - 1)
+  }
+
+  const goToNextQuestion = () => {
+    if (!currentQuestion) return
+
+    const hasAnswer = answers.some(
+      (answer) => answer.questionId === currentQuestion.id
+    )
+    if (!hasAnswer) return
+
+    advanceQuestion()
+  }
+
   const answerYes = () => {
     if (!currentQuestion) return
-    setAnswers((current) => [
-      ...current,
-      { questionId: currentQuestion.id, answer: true },
-    ])
+    replaceAnswer(currentQuestion.id, true)
+    setDefects((current) =>
+      current.filter((defect) => defect.questionId !== currentQuestion.id)
+    )
+    setDraftPhotos((current) =>
+      current.filter((photo) => photo.questionId !== currentQuestion.id)
+    )
     advanceQuestion()
   }
 
   const answerNo = () => {
     if (!currentQuestion) return
-    setDefectDescription("")
-    setDefectSafeToDrive(null)
-    setDefectPhoto(null)
+    const savedDefect = defects.find(
+      (defect) => defect.questionId === currentQuestion.id
+    )
+    const savedPhoto = draftPhotos.find(
+      (photo) => photo.questionId === currentQuestion.id
+    )
+
+    setDefectDescription(savedDefect?.description ?? "")
+    setDefectSafeToDrive(savedDefect?.safeToDrive ?? null)
+    setDefectPhoto(savedPhoto?.dataUrl ?? null)
     setDefectOpen(true)
   }
 
@@ -463,12 +500,11 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
       return
     }
 
-    setAnswers((current) => [
-      ...current,
-      { questionId: currentQuestion.id, answer: false },
-    ])
+    replaceAnswer(currentQuestion.id, false)
     setDefects((current) => [
-      ...current,
+      ...current.filter(
+        (defect) => defect.questionId !== currentQuestion.id
+      ),
       {
         questionId: currentQuestion.id,
         question: currentQuestion.text,
@@ -477,12 +513,14 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
       },
     ])
 
-    if (defectPhoto) {
-      setDraftPhotos((current) => [
-        ...current,
-        { questionId: currentQuestion.id, dataUrl: defectPhoto },
-      ])
-    }
+    setDraftPhotos((current) => [
+      ...current.filter(
+        (photo) => photo.questionId !== currentQuestion.id
+      ),
+      ...(defectPhoto
+        ? [{ questionId: currentQuestion.id, dataUrl: defectPhoto }]
+        : []),
+    ])
 
     setDefectOpen(false)
     setDefectDescription("")
@@ -569,6 +607,9 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
   const previewPhotos = previewEntry
     ? photos.filter((photo) => photo.daily_check_id === previewEntry.id)
     : []
+  const currentAnswer = currentQuestion
+    ? answers.find((answer) => answer.questionId === currentQuestion.id)
+    : undefined
 
   return (
     <main className="fixed inset-0 z-[80] bg-white p-3 overflow-y-auto pb-[80px]">
@@ -782,6 +823,16 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
               ))}
 
               <button
+                onClick={() => {
+                  setSummaryOpen(false)
+                  setQuestionIndex(DAILY_CHECK_QUESTIONS.length - 1)
+                }}
+                className="w-full h-[48px] rounded-[16px] bg-zinc-200 text-black font-bold text-[16px] mt-2"
+              >
+                ‹ BACK TO QUESTIONS
+              </button>
+
+              <button
                 onClick={confirmAndSave}
                 disabled={saving}
                 className="w-full h-[52px] rounded-[18px] bg-blue-600 text-white font-bold text-[17px] mt-3 disabled:opacity-50"
@@ -817,15 +868,39 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={answerNo}
-                  className="h-[62px] rounded-[20px] bg-red-500 text-white text-[21px] font-bold active:scale-[0.98]"
+                  className={`h-[62px] rounded-[20px] bg-red-500 text-white text-[21px] font-bold active:scale-[0.98] ${
+                    currentAnswer?.answer === false
+                      ? "ring-4 ring-red-200 ring-offset-2"
+                      : ""
+                  }`}
                 >
                   NO
                 </button>
                 <button
                   onClick={answerYes}
-                  className="h-[62px] rounded-[20px] bg-green-500 text-white text-[21px] font-bold active:scale-[0.98]"
+                  className={`h-[62px] rounded-[20px] bg-green-500 text-white text-[21px] font-bold active:scale-[0.98] ${
+                    currentAnswer?.answer === true
+                      ? "ring-4 ring-green-200 ring-offset-2"
+                      : ""
+                  }`}
                 >
                   YES
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <button
+                  onClick={goToPreviousQuestion}
+                  className="h-[48px] rounded-[16px] bg-zinc-200 text-black text-[16px] font-bold active:scale-[0.98]"
+                >
+                  ‹ BACK
+                </button>
+                <button
+                  onClick={goToNextQuestion}
+                  disabled={!currentAnswer}
+                  className="h-[48px] rounded-[16px] bg-blue-600 text-white text-[16px] font-bold active:scale-[0.98] disabled:bg-zinc-200 disabled:text-zinc-400"
+                >
+                  NEXT ›
                 </button>
               </div>
             </div>

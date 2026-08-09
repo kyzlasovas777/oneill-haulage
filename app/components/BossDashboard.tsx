@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import TrucksManager from "./TrucksManager"
 import ServicePage from "./ServicePage"
+import BossDailyChecksPage from "./BossDailyChecksPage"
 
 type Driver = {
   id: number
@@ -99,6 +100,7 @@ export default function BossDashboard({
   const [driverPin, setDriverPin] = useState("")
 const [driverTruck, setDriverTruck] = useState("")
 const [showServicePage, setShowServicePage] = useState(false)
+const [showDailyChecksPage, setShowDailyChecksPage] = useState(false)
 
 const [trucks, setTrucks] = useState<string[]>([])
 const [dieselStats, setDieselStats] =
@@ -515,6 +517,15 @@ setShowAddDriver(false)
   return <ServicePage onBack={() => setShowServicePage(false)} />
 }
 
+  if (showDailyChecksPage) {
+    return (
+      <BossDailyChecksPage
+        drivers={drivers}
+        onBack={() => setShowDailyChecksPage(false)}
+      />
+    )
+  }
+
   return (
 <main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
 <div className="relative bg-white px-4 pt-4 h-[80px] flex items-center justify-between">
@@ -637,6 +648,17 @@ Trucks
 <button
   onClick={() => {
     setShowBossMenu(false)
+    setShowDailyChecksPage(true)
+  }}
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+>
+  <span className="w-6 text-center text-[22px]">✅</span>
+  Daily Checks
+</button>
+
+<button
+  onClick={() => {
+    setShowBossMenu(false)
     openAddDriver()
   }}
   className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
@@ -744,4 +766,3 @@ Add Driver
     </main>
   )
 }
-
