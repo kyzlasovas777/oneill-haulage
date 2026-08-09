@@ -2,6 +2,7 @@ import { supabase } from "./supabase"
 
 let globalSyncStarted = false
 let syncRunning = false
+const queuedSyncDriverIds = new Set<number>()
 
 type DieselEntry = {
   id: number
@@ -701,7 +702,8 @@ async function runSync(driverId: number) {
   }
 
   if (syncRunning) {
-    console.log("GLOBAL SYNC: already running")
+    queuedSyncDriverIds.add(driverId)
+    console.log("GLOBAL SYNC: already running, queued", driverId)
     return
   }
 
@@ -721,6 +723,13 @@ async function runSync(driverId: number) {
     console.log("GLOBAL SYNC ERROR:", error)
   } finally {
     syncRunning = false
+
+    const nextDriverId = queuedSyncDriverIds.values().next().value
+
+    if (nextDriverId !== undefined) {
+      queuedSyncDriverIds.delete(nextDriverId)
+      void runSync(nextDriverId)
+    }
   }
 }
 
