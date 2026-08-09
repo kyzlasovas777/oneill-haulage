@@ -50,6 +50,20 @@ type DailyCheckPhoto = {
   created_at?: string
 }
 
+type MileageEntry = {
+  id: number
+  driver_id: number
+  entry_date: string
+  start_mileage: number
+  finish_mileage: number | null
+  total_miles: number | null
+  reg_number: string | null
+  avg_l100: number | null
+  estimated_litres: number | null
+  created_at?: string
+  syncStatus?: "synced" | "pending" | "delete_pending"
+}
+
 type DraftPhoto = {
   questionId: string
   dataUrl: string
@@ -193,6 +207,24 @@ function compareEntries(a: DailyCheckEntry, b: DailyCheckEntry) {
   return a.id - b.id
 }
 
+function normaliseReg(reg: string | null | undefined) {
+  return (reg ?? "").trim().toUpperCase()
+}
+
+function findOpenMileageEntry(entries: MileageEntry[], entryDate: string) {
+  return entries
+    .filter(
+      (entry) =>
+        entry.entry_date === entryDate &&
+        entry.finish_mileage === null &&
+        entry.syncStatus !== "delete_pending"
+    )
+    .sort((a, b) => {
+      const createdOrder = (b.created_at ?? "").localeCompare(a.created_at ?? "")
+      return createdOrder !== 0 ? createdOrder : b.id - a.id
+    })[0]
+}
+
 function compressPhoto(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -229,6 +261,7 @@ function compressPhoto(file: File): Promise<string> {
 export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps) {
   const entriesStorageKey = `oneill-daily-check-entries-${driverId}`
   const photosStorageKey = `oneill-daily-check-photos-${driverId}`
+  const mileageStorageKey = `oneill-mileage-entries-${driverId}`
   const trucksStorageKey = "oneill-active-trucks"
   const assignedTruckStorageKey = `oneill-assigned-truck-${driverId}`
 
@@ -244,9 +277,14 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
   const [assignedReg, setAssignedReg] = useState(() =>
     loadFromStorage(assignedTruckStorageKey, "")
   )
+  const [mileageEntries, setMileageEntries] = useState<MileageEntry[]>(() =>
+    loadFromStorage(mileageStorageKey, [])
+  )
 
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [mileageStepOpen, setMileageStepOpen] = useState(true)
   const [selectedReg, setSelectedReg] = useState("")
+  const [startMileage, setStartMileage] = useState("")
   const [questionIndex, setQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<DailyCheckAnswer[]>([])
   const [defects, setDefects] = useState<DailyCheckDefect[]>([])
@@ -275,6 +313,10 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
   useEffect(() => {
     localStorage.setItem(photosStorageKey, JSON.stringify(photos))
   }, [photos, photosStorageKey])
+
+  useEffect(() => {
+    localStorage.setItem(mileageStorageKey, JSON.stringify(mileageEntries))
+  }, [mileageEntries, mileageStorageKey])
 
   useEffect(() => {
     const loadTrucks = async () => {
@@ -374,6 +416,58 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
   ])
 
   useEffect(() => {
+    const loadMileageEntries = async () => {
+      if (!navigator.onLine) return
+
+      const { data, error } = await supabase
+        .from("mileage_entries")
+        .select("*")
+        .eq("driver_id", driverId)
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.log("DAILY CHECK MILEAGE LOAD ERROR:", error)
+        return
+      }
+
+      const localEntries = loadFromStorage<MileageEntry[]>(mileageStorageKey, [])
+      const localPending = localEntries.filter(
+        (entry) =>
+          entry.syncStatus === "pending" ||
+          entry.syncStatus === "delete_pending"
+      )
+      const deletedIds = new Set(
+        localPending
+          .filter((entry) => entry.syncStatus === "delete_pending")
+          .map((entry) => entry.id)
+      )
+      const remoteEntries: MileageEntry[] = (data ?? []).map((entry) => ({
+        ...entry,
+        syncStatus: "synced",
+      }))
+      const mergedEntries = [
+        ...remoteEntries.filter(
+          (entry) =>
+            !deletedIds.has(entry.id) &&
+            !localPending.some((local) => local.id === entry.id)
+        ),
+        ...localPending,
+      ]
+
+      setMileageEntries(mergedEntries)
+      localStorage.setItem(mileageStorageKey, JSON.stringify(mergedEntries))
+    }
+
+    void loadMileageEntries()
+    window.addEventListener("online", loadMileageEntries)
+
+    return () => {
+      window.removeEventListener("online", loadMileageEntries)
+    }
+  }, [driverId, mileageStorageKey])
+
+  useEffect(() => {
     const handleSynced = () => {
       setEntries(loadFromStorage(entriesStorageKey, []))
       setPhotos(loadFromStorage(photosStorageKey, []))
@@ -385,9 +479,22 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
     }
   }, [entriesStorageKey, photosStorageKey])
 
+  useEffect(() => {
+    const handleMileageSynced = () => {
+      setMileageEntries(loadFromStorage(mileageStorageKey, []))
+    }
+
+    window.addEventListener("oneill-mileage-synced", handleMileageSynced)
+    return () => {
+      window.removeEventListener("oneill-mileage-synced", handleMileageSynced)
+    }
+  }, [mileageStorageKey])
+
   const resetWizard = () => {
     setWizardOpen(false)
+    setMileageStepOpen(true)
     setSelectedReg("")
+    setStartMileage("")
     setQuestionIndex(0)
     setAnswers([])
     setDefects([])
@@ -399,14 +506,85 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
     setSummaryOpen(false)
   }
 
-  const startCheck = () => {
-    setSelectedReg("")
+  const startCheck = async () => {
+    let openMileage = findOpenMileageEntry(mileageEntries, today)
+    let nextAssignedReg = assignedReg
+
+    if (!openMileage && navigator.onLine) {
+      const { data, error } = await supabase
+        .from("mileage_entries")
+        .select("*")
+        .eq("driver_id", driverId)
+        .eq("entry_date", today)
+        .is("finish_mileage", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (error) {
+        console.log("DAILY CHECK OPEN MILEAGE ERROR:", error)
+      } else if (data) {
+        openMileage = { ...data, syncStatus: "synced" }
+        const nextMileageEntries = [
+          openMileage,
+          ...mileageEntries.filter((entry) => entry.id !== openMileage?.id),
+        ]
+        setMileageEntries(nextMileageEntries)
+        localStorage.setItem(mileageStorageKey, JSON.stringify(nextMileageEntries))
+      }
+    }
+
+    if (!nextAssignedReg && navigator.onLine) {
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("truck_reg")
+        .eq("id", driverId)
+        .single()
+
+      if (error) {
+        console.log("DAILY CHECK ASSIGNED TRUCK ERROR:", error)
+      } else {
+        nextAssignedReg = data?.truck_reg ?? ""
+        setAssignedReg(nextAssignedReg)
+        localStorage.setItem(
+          assignedTruckStorageKey,
+          JSON.stringify(nextAssignedReg)
+        )
+      }
+    }
+
+    setSelectedReg(normaliseReg(openMileage?.reg_number || nextAssignedReg))
+    setStartMileage(
+      openMileage ? String(openMileage.start_mileage) : ""
+    )
+    setMileageStepOpen(true)
     setQuestionIndex(0)
     setAnswers([])
     setDefects([])
     setDraftPhotos([])
     setSummaryOpen(false)
     setWizardOpen(true)
+  }
+
+  const continueFromMileage = () => {
+    const start = Number(startMileage)
+
+    if (!selectedReg.trim()) {
+      alert("Select truck")
+      return
+    }
+    if (!startMileage.trim()) {
+      alert("Enter start miles")
+      return
+    }
+    if (!Number.isInteger(start) || start <= 0) {
+      alert("Start miles must be a whole number higher than 0")
+      return
+    }
+
+    setSelectedReg(normaliseReg(selectedReg))
+    setMileageStepOpen(false)
+    setQuestionIndex(0)
   }
 
   const advanceQuestion = () => {
@@ -427,7 +605,7 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
 
   const goToPreviousQuestion = () => {
     if (questionIndex === 0) {
-      setSelectedReg("")
+      setMileageStepOpen(true)
       return
     }
 
@@ -536,16 +714,53 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
       return
     }
 
+    const start = Number(startMileage)
+    if (!Number.isInteger(start) || start <= 0) {
+      alert("Enter valid start miles")
+      setSummaryOpen(false)
+      setMileageStepOpen(true)
+      return
+    }
+
     setSaving(true)
 
     const localId = Date.now()
     const checkedAt = new Date().toISOString()
+    const cleanReg = normaliseReg(selectedReg)
+    const openMileage = findOpenMileageEntry(mileageEntries, today)
+    const nextMileageEntries: MileageEntry[] = openMileage
+      ? mileageEntries.map((entry) =>
+          entry.id === openMileage.id
+            ? {
+                ...entry,
+                start_mileage: start,
+                reg_number: cleanReg,
+                syncStatus: "pending",
+              }
+            : entry
+        )
+      : [
+          {
+            id: localId,
+            driver_id: driverId,
+            entry_date: today,
+            start_mileage: start,
+            finish_mileage: null,
+            total_miles: null,
+            reg_number: cleanReg,
+            avg_l100: null,
+            estimated_litres: null,
+            created_at: checkedAt,
+            syncStatus: "pending",
+          },
+          ...mileageEntries,
+        ]
     const localEntry: DailyCheckEntry = {
       id: localId,
       driver_id: driverId,
       entry_date: formatEntryDate(new Date()),
       checked_at: checkedAt,
-      reg_number: selectedReg.trim().toUpperCase(),
+      reg_number: cleanReg,
       status: defects.length === 0 ? "no_defects" : "defect_reported",
       safe_to_drive: defects.every((defect) => defect.safeToDrive),
       answers,
@@ -565,6 +780,8 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
 
     setEntries((current) => [...current, localEntry])
     setPhotos((current) => [...current, ...localPhotos])
+    setMileageEntries(nextMileageEntries)
+    localStorage.setItem(mileageStorageKey, JSON.stringify(nextMileageEntries))
     localStorage.setItem(
       entriesStorageKey,
       JSON.stringify([...loadFromStorage<DailyCheckEntry[]>(entriesStorageKey, []), localEntry])
@@ -762,26 +979,75 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
             <div className="w-[52px]" />
           </div>
 
-          {!selectedReg ? (
-            <div className="flex-1 flex flex-col justify-center max-w-[380px] w-full mx-auto">
-              <div className="text-center text-[52px] mb-3">🚛</div>
-              <h2 className="text-center text-[26px] font-bold mb-6">Select Truck</h2>
-              <select
-                value={selectedReg}
-                onChange={(event) => setSelectedReg(event.target.value)}
-                className="w-full h-[52px] rounded-[16px] border border-zinc-300 px-4 text-[18px] font-bold bg-white"
+          {mileageStepOpen ? (
+            <div className="flex-1 flex flex-col max-w-[420px] w-full mx-auto">
+              <div className="pt-6">
+                <div className="flex justify-between text-[13px] text-zinc-500 mb-2">
+                  <span>{selectedReg || "Select truck"}</span>
+                  <span>1 of {DAILY_CHECK_QUESTIONS.length + 1}</span>
+                </div>
+                <div className="w-full h-[7px] bg-zinc-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all"
+                    style={{ width: `${100 / (DAILY_CHECK_QUESTIONS.length + 1)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col justify-center">
+                <div className="text-center text-[52px] mb-2">🚛</div>
+                <h2 className="text-center text-[28px] font-bold mb-5">Start miles</h2>
+
+                <label className="text-[13px] font-bold text-zinc-500 mb-1 ml-1">
+                  Truck
+                </label>
+                <select
+                  value={selectedReg}
+                  onChange={(event) => setSelectedReg(event.target.value)}
+                  className="w-full h-[52px] rounded-[16px] border border-zinc-300 px-4 text-[18px] font-bold bg-white"
+                >
+                  <option value="">Select Reg</option>
+                  {trucks.map((truck) => (
+                    <option key={truck.id} value={normaliseReg(truck.reg)}>
+                      {truck.reg}
+                    </option>
+                  ))}
+                  {assignedReg &&
+                    !trucks.some(
+                      (truck) => normaliseReg(truck.reg) === normaliseReg(assignedReg)
+                    ) && (
+                      <option value={normaliseReg(assignedReg)}>{assignedReg}</option>
+                    )}
+                  {selectedReg &&
+                    !trucks.some(
+                      (truck) => normaliseReg(truck.reg) === normaliseReg(selectedReg)
+                    ) &&
+                    normaliseReg(assignedReg) !== normaliseReg(selectedReg) && (
+                      <option value={normaliseReg(selectedReg)}>{selectedReg}</option>
+                    )}
+                </select>
+
+                <label className="text-[13px] font-bold text-zinc-500 mb-1 mt-4 ml-1">
+                  Odometer
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  placeholder="Enter start miles"
+                  value={startMileage}
+                  onChange={(event) => setStartMileage(event.target.value)}
+                  className="w-full h-[56px] rounded-[16px] border border-zinc-300 px-4 text-[22px] font-bold bg-white outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <button
+                onClick={continueFromMileage}
+                className="w-full h-[52px] rounded-[18px] bg-blue-600 text-white font-bold text-[17px] active:scale-[0.98]"
               >
-                <option value="">Select Reg</option>
-                {trucks.map((truck) => (
-                  <option key={truck.id} value={truck.reg}>
-                    {truck.reg}
-                  </option>
-                ))}
-                {assignedReg &&
-                  !trucks.some((truck) => truck.reg === assignedReg) && (
-                    <option value={assignedReg}>{assignedReg}</option>
-                  )}
-              </select>
+                NEXT ›
+              </button>
             </div>
           ) : summaryOpen ? (
             <div className="flex-1 overflow-y-auto max-w-[420px] w-full mx-auto pt-5">
@@ -789,6 +1055,11 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
               <p className="text-center text-[20px] font-bold mt-1 mb-5">
                 {selectedReg}
               </p>
+
+              <div className="rounded-[16px] bg-zinc-100 px-4 py-3 mb-4 flex items-center justify-between">
+                <span className="text-zinc-500 font-semibold">Start miles</span>
+                <span className="text-[20px] font-bold">{startMileage}</span>
+              </div>
 
               <div
                 className={`rounded-[20px] p-4 mb-4 text-center ${
@@ -846,14 +1117,14 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
                 <div className="flex justify-between text-[13px] text-zinc-500 mb-2">
                   <span>{selectedReg}</span>
                   <span>
-                    {questionIndex + 1} of {DAILY_CHECK_QUESTIONS.length}
+                    {questionIndex + 2} of {DAILY_CHECK_QUESTIONS.length + 1}
                   </span>
                 </div>
                 <div className="w-full h-[7px] bg-zinc-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-green-500 rounded-full transition-all"
                     style={{
-                      width: `${((questionIndex + 1) / DAILY_CHECK_QUESTIONS.length) * 100}%`,
+                      width: `${((questionIndex + 2) / (DAILY_CHECK_QUESTIONS.length + 1)) * 100}%`,
                     }}
                   />
                 </div>
