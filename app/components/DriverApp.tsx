@@ -154,9 +154,9 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
 
   const currentDate = formatEntryDate(today)
 
-  const [entries, setEntries] = useState<Entry[]>(() =>
-    loadFromStorage<Entry[]>(entriesStorageKey, [])
-  )
+ const [entries, setEntries] = useState<Entry[]>(() =>
+  loadFromStorage<Entry[]>(entriesStorageKey, []).sort((a, b) => a.id - b.id)
+)
 
   const [archives, setArchives] = useState<WeekArchive[]>(() =>
     loadFromStorage<WeekArchive[]>(archivesStorageKey, [])
@@ -505,9 +505,11 @@ const loadTrucks = async () => {
 
     const allEntries = [...remoteEntries, ...localPending]
 
-    const currentWeekEntries = allEntries.filter(
-      (entry) => getWeekTitleFromEntryDate(entry.date) === currentWeekTitle
-    )
+  const currentWeekEntries = allEntries
+  .filter(
+    (entry) => getWeekTitleFromEntryDate(entry.date) === currentWeekTitle
+  )
+  .sort((a, b) => a.id - b.id)
 
     const archiveGroups = allEntries
       .filter((entry) => getWeekTitleFromEntryDate(entry.date) !== currentWeekTitle)
