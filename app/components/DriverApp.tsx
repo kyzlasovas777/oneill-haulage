@@ -7,6 +7,10 @@ import DieselPage from "./DieselPage"
 import DailyCheckPage from "./DailyCheckPage"
 import * as XLSX from "xlsx-js-style"
 import { startOneillGlobalSync } from "./oneillGlobalSync"
+import {
+  hydratePrivatePhotoUrls,
+  uploadPrivatePhoto,
+} from "./privatePhotoStorage"
 
 type Entry = {
   id: number
@@ -213,8 +217,8 @@ const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
 const [trucks, setTrucks] = useState<string[]>([])
 
 useEffect(() => {
-  startOneillGlobalSync(driverId)
-}, [driverId])
+  startOneillGlobalSync(driverId, isBoss)
+}, [driverId, isBoss])
 
 
   useEffect(() => {
@@ -311,21 +315,13 @@ const visibleTitle =
 
     const filePath = `${driverId}/${entryId}/${Date.now()}-${i}.jpg`
 
-    const { error: uploadError } = await supabase.storage
-      .from("entry-photos")
-      .upload(filePath, blob)
-
-    if (uploadError) throw uploadError
-
-    const { data: publicData } = supabase.storage
-      .from("entry-photos")
-      .getPublicUrl(filePath)
+    await uploadPrivatePhoto(filePath, blob)
 
     const { error: photoInsertError } = await supabase
       .from("entry_photos")
       .insert({
         entry_id: entryId,
-        photo_url: publicData.publicUrl,
+        photo_url: filePath,
         file_path: filePath,
       })
 
@@ -750,7 +746,7 @@ const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverNa
       return
     }
 
-    setSavedPhotos(data ?? [])
+    setSavedPhotos(await hydratePrivatePhotoUrls((data ?? []) as EntryPhoto[]))
   }
 
   const compressPhotoForUpload = (file: File): Promise<Blob> => {
@@ -808,26 +804,18 @@ const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverNa
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
       const filePath = `${driverId}/${entryId}/${Date.now()}-${cleanName}`
 
-      const { error: uploadError } = await supabase.storage
-        .from("entry-photos")
-        .upload(filePath, compressedFile, {
-          contentType: "image/jpeg",
-        })
-
-      if (uploadError) {
+      try {
+        await uploadPrivatePhoto(filePath, compressedFile)
+      } catch (uploadError) {
         console.log("PHOTO UPLOAD ERROR:", uploadError)
         throw uploadError
       }
-
-      const { data: publicData } = supabase.storage
-        .from("entry-photos")
-        .getPublicUrl(filePath)
 
       const { error: photoInsertError } = await supabase
         .from("entry_photos")
         .insert({
           entry_id: entryId,
-          photo_url: publicData.publicUrl,
+          photo_url: filePath,
           file_path: filePath,
         })
 
@@ -846,7 +834,7 @@ const openPreview = async (entry: Entry) => {
     .select("id, entry_id, photo_url, file_path")
     .eq("entry_id", entry.id)
 
-  setPreviewPhotos(data ?? [])
+  setPreviewPhotos(await hydratePrivatePhotoUrls((data ?? []) as EntryPhoto[]))
 }
 
   const openEdit = (entry: Entry) => {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import { triggerOneillGlobalSync } from "./oneillGlobalSync"
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch"
+import { hydratePrivatePhotoUrls } from "./privatePhotoStorage"
 
 type ServicePageProps = {
   onBack: () => void
@@ -320,7 +321,9 @@ const loadItems = async (truckId: number) => {
       return
     }
 
-    remotePhotos = photoData ?? []
+    remotePhotos = await hydratePrivatePhotoUrls(
+      (photoData ?? []) as ServicePhoto[]
+    )
   }
 
   const localPendingPhotos = localPhotos.filter(

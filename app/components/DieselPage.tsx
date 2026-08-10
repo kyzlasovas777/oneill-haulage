@@ -3,6 +3,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { supabase } from "./supabase"
 import { triggerOneillGlobalSync } from "./oneillGlobalSync"
+import {
+  hydratePrivatePhotoUrls,
+  uploadPrivatePhoto,
+} from "./privatePhotoStorage"
 
 type DieselPageProps = {
   driverId: number
@@ -289,22 +293,11 @@ export default function DieselPage({
       .toString(36)
       .slice(2)}-${cleanName}`
 
-    const { error } = await supabase.storage
-      .from("entry-photos")
-      .upload(filePath, compressedFile, {
-        contentType: "image/jpeg",
-      })
-
-    if (error) {
+    try {
+      return await uploadPrivatePhoto(filePath, compressedFile)
+    } catch (error) {
       console.log("DIESEL PHOTO UPLOAD ERROR:", error)
       throw error
-    }
-
-    const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
-
-    return {
-      photo_url: data.publicUrl,
-      photo_path: filePath,
     }
   }
 
@@ -332,7 +325,7 @@ export default function DieselPage({
         .insert({
           diesel_entry_id: realEntryId,
           driver_id: driverId,
-          photo_url: uploaded.photo_url,
+          photo_url: uploaded.photo_path,
           photo_path: uploaded.photo_path,
         })
         .select()
@@ -343,7 +336,7 @@ export default function DieselPage({
         throw error
       }
 
-      if (data) insertedPhotos.push(data)
+      if (data) insertedPhotos.push({ ...data, photo_url: uploaded.photo_url })
     }
 
     return insertedPhotos
@@ -641,9 +634,13 @@ export default function DieselPage({
       (photo) => !photo.photo_path || photo.photo_url.startsWith("data:")
     )
 
+    const signedRemotePhotos = await hydratePrivatePhotoUrls(
+      (photoData ?? []) as DieselPhoto[]
+    )
+
     const mergedPhotos = [
       ...localOnlyPhotos,
-      ...(photoData ?? []).filter(
+      ...signedRemotePhotos.filter(
         (photo) =>
           !deletedPhotoIds.includes(photo.id) &&
           !localOnlyPhotos.some((local) => local.id === photo.id)

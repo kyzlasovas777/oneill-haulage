@@ -3,16 +3,30 @@
 import { useState } from "react"
 import { supabase } from "./supabase"
 
-type Driver = {
+export type DriverIdentity = {
   id: number
   name: string
-  pin: string
+  truckReg?: string
   active?: boolean
 }
 
 type LoginScreenProps = {
-  onDriverLogin: (driver: Driver) => void
+  onDriverLogin: (driver: DriverIdentity) => void
   onAdminLogin: () => void
+}
+
+type PinLoginResponse = {
+  token_hash?: string
+  type?: "email"
+  error?: string
+}
+
+type AppIdentity = {
+  role: "boss" | "driver"
+  driver_id: number | null
+  driver_name: string | null
+  truck_reg: string | null
+  active: boolean
 }
 
 export default function LoginScreen({
@@ -26,63 +40,74 @@ const login = async () => {
   const cleanPin = pin.trim()
   setDebug("Checking...")
 
-  if (!cleanPin) {
-    setDebug("Enter PIN")
-    return
-  }
-
-  if (cleanPin === "9999") {
-    setDebug("Boss login OK")
-    onAdminLogin()
-    return
-  }
-
-  const savedDriversRaw = localStorage.getItem("oneill-drivers")
-  const savedDrivers: Driver[] = savedDriversRaw ? JSON.parse(savedDriversRaw) : []
-
-  const savedDriver = savedDrivers.find(
-    (driver) => driver.pin === cleanPin && driver.active !== false
-  )
-
-  if (savedDriver) {
-    localStorage.setItem("lastDriver", JSON.stringify(savedDriver))
-
-    if (!navigator.onLine) {
-      setDebug("Offline driver login OK")
-    } else {
-      setDebug("Driver login OK")
-    }
-
-    onDriverLogin(savedDriver)
+  if (!/^\d{4}$/.test(cleanPin)) {
+    setDebug("Enter 4 digit PIN")
     return
   }
 
   if (!navigator.onLine) {
-    setDebug("No internet. Driver not saved on this device.")
+    setDebug("No internet. Login once online first.")
     return
   }
 
-  const { data, error } = await supabase
-    .from("drivers")
-    .select("id, name, pin, active")
-    .eq("pin", cleanPin)
-    .eq("active", true)
-    .maybeSingle()
+  try {
+    const { data, error } = await supabase.functions.invoke<PinLoginResponse>(
+      "pin-login",
+      { body: { pin: cleanPin } }
+    )
 
-  if (error) {
-    setDebug("Supabase error: " + error.message)
-    return
+    if (error || !data?.token_hash) {
+      setDebug(data?.error ?? "Invalid PIN or temporarily blocked")
+      return
+    }
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: data.token_hash,
+      type: "email",
+    })
+
+    if (verifyError) {
+      setDebug("Login service unavailable")
+      return
+    }
+
+    const { data: identity, error: identityError } = await supabase
+      .rpc("current_app_identity")
+      .maybeSingle<AppIdentity>()
+
+    if (identityError || !identity?.active) {
+      await supabase.auth.signOut()
+      setDebug("Invalid PIN or driver disabled")
+      return
+    }
+
+    setPin("")
+
+    if (identity.role === "boss") {
+      setDebug("Boss login OK")
+      onAdminLogin()
+      return
+    }
+
+    if (!identity.driver_id || !identity.driver_name) {
+      await supabase.auth.signOut()
+      setDebug("Login service unavailable")
+      return
+    }
+
+    const driver: DriverIdentity = {
+      id: identity.driver_id,
+      name: identity.driver_name,
+      truckReg: identity.truck_reg ?? "",
+      active: identity.active,
+    }
+
+    localStorage.setItem("lastDriver", JSON.stringify(driver))
+    setDebug("Driver login OK")
+    onDriverLogin(driver)
+  } catch {
+    setDebug("Login service unavailable")
   }
-
-  if (!data) {
-    setDebug("Invalid PIN or driver disabled")
-    return
-  }
-
-  localStorage.setItem("lastDriver", JSON.stringify(data))
-
-  setDebug("Driver login OK")
-  onDriverLogin(data)
 }
 
   return (

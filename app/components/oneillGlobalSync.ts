@@ -1,6 +1,8 @@
 import { supabase } from "./supabase"
+import { uploadPrivatePhoto } from "./privatePhotoStorage"
 
 let globalSyncStarted = false
+let globalSyncIsBoss = false
 let syncRunning = false
 const queuedSyncDriverIds = new Set<number>()
 let mileageSyncQueue = Promise.resolve()
@@ -133,20 +135,7 @@ async function uploadDieselPhoto(driverId: number, file: File) {
     .toString(36)
     .slice(2)}-${cleanName}`
 
-  const { error } = await supabase.storage
-    .from("entry-photos")
-    .upload(filePath, file, {
-      contentType: "image/jpeg",
-    })
-
-  if (error) throw error
-
-  const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
-
-  return {
-    photo_url: data.publicUrl,
-    photo_path: filePath,
-  }
+  return uploadPrivatePhoto(filePath, file)
 }
 
 async function uploadServicePhoto(file: File) {
@@ -156,20 +145,7 @@ async function uploadServicePhoto(file: File) {
     .toString(36)
     .slice(2)}-${cleanName}`
 
-  const { error } = await supabase.storage
-    .from("entry-photos")
-    .upload(filePath, file, {
-      contentType: "image/jpeg",
-    })
-
-  if (error) throw error
-
-  const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
-
-  return {
-    photo_url: data.publicUrl,
-    photo_path: filePath,
-  }
+  return uploadPrivatePhoto(filePath, file)
 }
 
 async function uploadDailyCheckPhoto(driverId: number, file: File) {
@@ -178,20 +154,7 @@ async function uploadDailyCheckPhoto(driverId: number, file: File) {
     .toString(36)
     .slice(2)}-${cleanName}`
 
-  const { error } = await supabase.storage
-    .from("entry-photos")
-    .upload(filePath, file, {
-      contentType: "image/jpeg",
-    })
-
-  if (error) throw error
-
-  const { data } = supabase.storage.from("entry-photos").getPublicUrl(filePath)
-
-  return {
-    photo_url: data.publicUrl,
-    photo_path: filePath,
-  }
+  return uploadPrivatePhoto(filePath, file)
 }
 
 async function uploadLocalDailyCheckPhotos(
@@ -219,14 +182,14 @@ async function uploadLocalDailyCheckPhotos(
         daily_check_id: checkId,
         driver_id: driverId,
         question_id: photo.question_id,
-        photo_url: uploaded.photo_url,
+        photo_url: uploaded.photo_path,
         photo_path: uploaded.photo_path,
       })
       .select()
       .single()
 
     if (error) throw error
-    if (data) insertedPhotos.push(data)
+    if (data) insertedPhotos.push({ ...data, photo_url: uploaded.photo_url })
   }
 
   return insertedPhotos
@@ -255,14 +218,14 @@ async function uploadLocalServicePhotosForEntry(
       .from("service_photos")
       .insert({
         service_id: realServiceId,
-        photo_url: uploaded.photo_url,
+        photo_url: uploaded.photo_path,
         photo_path: uploaded.photo_path,
       })
       .select()
       .single()
 
     if (error) throw error
-    if (data) insertedPhotos.push(data)
+    if (data) insertedPhotos.push({ ...data, photo_url: uploaded.photo_url })
   }
 
   return insertedPhotos
@@ -293,14 +256,14 @@ async function uploadLocalDieselPhotosForEntry(
       .insert({
         diesel_entry_id: realEntryId,
         driver_id: driverId,
-        photo_url: uploaded.photo_url,
+        photo_url: uploaded.photo_path,
         photo_path: uploaded.photo_path,
       })
       .select()
       .single()
 
     if (error) throw error
-    if (data) insertedPhotos.push(data)
+    if (data) insertedPhotos.push({ ...data, photo_url: uploaded.photo_url })
   }
 
   return insertedPhotos
@@ -947,7 +910,9 @@ async function runSync(driverId: number) {
 
     await syncMileageEntriesGlobal(driverId)
 
-    await syncServiceEntriesGlobal()
+    if (globalSyncIsBoss) {
+      await syncServiceEntriesGlobal()
+    }
 
     await syncDailyChecksGlobal(driverId)
 
@@ -966,8 +931,9 @@ async function runSync(driverId: number) {
   }
 }
 
-export function startOneillGlobalSync(driverId: number) {
+export function startOneillGlobalSync(driverId: number, isBoss = false) {
   if (typeof window === "undefined") return
+  globalSyncIsBoss = isBoss
   if (globalSyncStarted) return
 
   globalSyncStarted = true

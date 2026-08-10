@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { DAILY_CHECK_QUESTIONS } from "./DailyCheckPage"
 import { supabase } from "./supabase"
+import { hydratePrivatePhotoUrls } from "./privatePhotoStorage"
 
 type DriverSummary = {
   id: number
@@ -174,7 +175,11 @@ export default function BossDailyChecksPage({
         boss_note: entry.boss_note ?? "",
       }))
     )
-    setPhotos((photosResult.data ?? []) as DailyCheckPhoto[])
+    setPhotos(
+      await hydratePrivatePhotoUrls(
+        (photosResult.data ?? []) as DailyCheckPhoto[]
+      )
+    )
     setLoading(false)
   }, [])
 

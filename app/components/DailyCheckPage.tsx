@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import { triggerOneillGlobalSync } from "./oneillGlobalSync"
+import { hydratePrivatePhotoUrls } from "./privatePhotoStorage"
 
 type DailyCheckPageProps = {
   driverId: number
@@ -390,8 +391,11 @@ export default function DailyCheckPage({ driverId, onBack }: DailyCheckPageProps
           pendingEntryIds.has(photo.daily_check_id) ||
           photo.photo_url.startsWith("data:")
       )
+      const signedRemotePhotos = await hydratePrivatePhotoUrls(
+        (remotePhotos ?? []) as DailyCheckPhoto[]
+      )
       const mergedPhotos = [
-        ...((remotePhotos ?? []) as DailyCheckPhoto[]).filter(
+        ...signedRemotePhotos.filter(
           (photo) =>
             !pendingPhotos.some((localPhoto) => localPhoto.id === photo.id)
         ),

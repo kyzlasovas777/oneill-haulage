@@ -9,7 +9,6 @@ import BossDailyChecksPage from "./BossDailyChecksPage"
 type Driver = {
   id: number
   name: string
-  pin: string
   truckReg?: string
   active?: boolean
   syncStatus?: "synced" | "pending"
@@ -54,7 +53,18 @@ function loadDrivers(): Driver[] {
 
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : []
+    const parsed = saved
+      ? (JSON.parse(saved) as Array<Driver & { pin?: string }>)
+      : []
+    const sanitized = parsed.map((driver) => ({
+      id: driver.id,
+      name: driver.name,
+      truckReg: driver.truckReg ?? "",
+      active: driver.active !== false,
+      syncStatus: driver.syncStatus,
+    }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized))
+    return sanitized
   } catch {
     return []
   }
@@ -266,131 +276,35 @@ const syncAllDriversCurrentWeekEntries = async () => {
   }
 
   const syncDrivers = async () => {
-    const localDrivers = loadDrivers()
-    setSyncing(true)
-    setSyncText("Syncing...")
-
-    for (const driver of localDrivers) {
-      if (driver.syncStatus === "pending") {
-        const isLocalOnly = driver.id > 1000000000000
-
-        if (isLocalOnly) {
-          const { data, error } = await supabase
-            .from("drivers")
-          .insert({
-  name: driver.name,
-  pin: driver.pin,
-  truck_reg: driver.truckReg ?? "",
-  active: driver.active !== false,
-})
-.select("id, name, pin, active, truck_reg")
-            .single()
-
-          if (error) {
-            console.log("SYNC ERROR:", error)
-            setSyncText("Sync error: " + error.message)
-            setSyncing(false)
-            return
-          }
-
-          const updatedDrivers = loadDrivers().map((item) =>
-            item.id === driver.id
-             ? {
-    id: data.id,
-    name: data.name,
-    pin: data.pin,
-    truckReg: data.truck_reg ?? "",
-    active: data.active,
-    syncStatus: "synced" as const,
-  }
-              : item
-          )
-
-          saveDriversLocal(updatedDrivers)
-        } else {
-          const { data, error } = await supabase
-            .from("drivers")
-         .update({
-  name: driver.name,
-  pin: driver.pin,
-  truck_reg: driver.truckReg ?? "",
-  active: driver.active !== false,
-})
-            .eq("id", driver.id)
-           .select("id, name, pin, active, truck_reg")
-            .single()
-
-          if (error) {
-            console.log("UPDATE ERROR:", error)
-            setSyncText("Sync error: " + error.message)
-            setSyncing(false)
-            return
-          }
-
-          const updatedDrivers = loadDrivers().map((item) =>
-            item.id === driver.id
-           ? {
-    id: data.id,
-    name: data.name,
-    pin: data.pin,
-    truckReg: data.truck_reg ?? "",
-    active: data.active,
-    syncStatus: "synced" as const,
-  }
-              : item
-          )
-
-          saveDriversLocal(updatedDrivers)
-        }
-      }
-    }
-
-    setSyncText("Synced")
-    setSyncing(false)
+    await loadFromSupabase()
   }
 
   const loadFromSupabase = async () => {
+    setSyncing(true)
     const { data, error } = await supabase
   .from("drivers")
-  .select("id, name, pin, active, truck_reg")
+  .select("id, name, active, truck_reg")
       .order("active", { ascending: false })
       .order("name", { ascending: true })
 
     if (error) {
       console.log("LOAD DRIVERS ERROR:", error)
       setSyncText("Offline mode")
+      setSyncing(false)
       return
     }
-
-    const pendingLocal = loadDrivers().filter(
-      (driver) => driver.syncStatus === "pending"
-    )
 
  const remoteDrivers: Driver[] = (data ?? []).map((driver) => ({
   id: driver.id,
   name: driver.name,
-  pin: driver.pin,
   truckReg: driver.truck_reg ?? "",
   active: driver.active !== false,
   syncStatus: "synced",
 }))
 
-    const mergedDrivers = [...remoteDrivers]
-
-    for (const pendingDriver of pendingLocal) {
-      const existingIndex = mergedDrivers.findIndex(
-        (driver) => driver.id === pendingDriver.id
-      )
-
-      if (existingIndex >= 0) {
-        mergedDrivers[existingIndex] = pendingDriver
-      } else {
-        mergedDrivers.push(pendingDriver)
-      }
-    }
-
-    saveDriversLocal(mergedDrivers)
+    saveDriversLocal(remoteDrivers)
     setSyncText("Loaded from Supabase")
+    setSyncing(false)
   }
 
 useEffect(() => {
@@ -400,7 +314,7 @@ loadDieselStats()
 syncAllDriversCurrentWeekEntries()
 
     const handleOnline = () => {
-      syncDrivers()
+      void syncDrivers()
     }
 
     window.addEventListener("online", handleOnline)
@@ -421,7 +335,7 @@ const openAddDriver = () => {
 const openEditDriver = (driver: Driver) => {
   setEditingDriverId(driver.id)
   setDriverName(driver.name)
-  setDriverPin(driver.pin)
+  setDriverPin("")
   setDriverTruck(driver.truckReg ?? "")
   setShowAddDriver(true)
 }
@@ -433,45 +347,36 @@ const openEditDriver = (driver: Driver) => {
 
     if (!cleanName) return
 
-    if (!/^\d{4}$/.test(cleanPin)) {
-      alert("PIN must be 4 numbers")
+    if (!navigator.onLine) {
+      alert("Internet is required to save driver security details")
       return
     }
 
-    const pinExists = drivers.some(
-      (driver) => driver.pin === cleanPin && driver.id !== editingDriverId
-    )
-
-    if (pinExists) {
-      alert("This PIN already exists")
+    if ((!editingDriverId && !/^\d{4}$/.test(cleanPin)) ||
+        (editingDriverId && cleanPin !== "" && !/^\d{4}$/.test(cleanPin))) {
+      alert(editingDriverId ? "PIN must be blank or 4 numbers" : "PIN must be 4 numbers")
       return
     }
 
-    if (editingDriverId) {
-      const nextDrivers = drivers.map((driver) =>
-        driver.id === editingDriverId
-         ? {
-    ...driver,
-    name: cleanName,
-    pin: cleanPin,
-    truckReg: cleanTruck,
-    syncStatus: "pending" as const,
-  }
-          : driver
-      )
+    setSyncing(true)
+    setSyncText("Saving...")
 
-      saveDriversLocal(nextDrivers)
-    } else {
-    const newDriver: Driver = {
-  id: Date.now(),
-  name: cleanName,
-  pin: cleanPin,
-  truckReg: cleanTruck,
-  active: true,
-  syncStatus: "pending",
-}
+    const currentDriver = editingDriverId
+      ? drivers.find((driver) => driver.id === editingDriverId)
+      : null
+    const { error } = await supabase.rpc("boss_save_driver", {
+      p_driver_id: editingDriverId,
+      p_name: cleanName,
+      p_pin: cleanPin || null,
+      p_truck_reg: cleanTruck,
+      p_active: currentDriver?.active !== false,
+    })
 
-      saveDriversLocal([...drivers, newDriver])
+    if (error) {
+      setSyncing(false)
+      setSyncText("Save error")
+      alert(error.code === "23505" ? "This PIN already exists" : error.message)
+      return
     }
 
    setDriverName("")
@@ -480,35 +385,31 @@ setDriverTruck("")
 setEditingDriverId(null)
 setShowAddDriver(false)
 
-    if (navigator.onLine) {
-      setTimeout(() => {
-        syncDrivers()
-      }, 300)
-    } else {
-      setSyncText("Saved offline. Will sync later.")
-    }
+    await loadFromSupabase()
   }
 
   const toggleDriverActive = async (driver: Driver) => {
-    const nextDrivers = drivers.map((item) =>
-      item.id === driver.id
-        ? {
-            ...item,
-            active: item.active === false ? true : false,
-            syncStatus: "pending" as const,
-          }
-        : item
-    )
-
-    saveDriversLocal(nextDrivers)
-
-    if (navigator.onLine) {
-      setTimeout(() => {
-        syncDrivers()
-      }, 300)
-    } else {
-      setSyncText("Saved offline. Will sync later.")
+    if (!navigator.onLine) {
+      alert("Internet is required to change driver access")
+      return
     }
+
+    setSyncing(true)
+    const { error } = await supabase.rpc("boss_save_driver", {
+      p_driver_id: driver.id,
+      p_name: driver.name,
+      p_pin: null,
+      p_truck_reg: driver.truckReg ?? "",
+      p_active: driver.active === false,
+    })
+
+    if (error) {
+      setSyncing(false)
+      alert(error.message)
+      return
+    }
+
+    await loadFromSupabase()
   }
 
   const visibleDrivers = sortDrivers(drivers)
@@ -571,7 +472,7 @@ className={`relative rounded-[18px] border border-green-400 p-3 pb-6 ...
     </p>
 
     <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
-      PIN: {driver.pin}
+      PIN: protected
     </p>
 
     <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
@@ -718,7 +619,7 @@ Add Driver
 
             <input
               type="tel"
-              placeholder="4 digit PIN"
+              placeholder={editingDriverId ? "New PIN (leave blank to keep)" : "4 digit PIN"}
               value={driverPin}
               maxLength={4}
               inputMode="numeric"
