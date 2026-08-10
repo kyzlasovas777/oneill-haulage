@@ -9,6 +9,7 @@ import BossDailyChecksPage from "./BossDailyChecksPage"
 type Driver = {
   id: number
   name: string
+  pin?: string
   truckReg?: string
   active?: boolean
   syncStatus?: "synced" | "pending"
@@ -59,6 +60,7 @@ function loadDrivers(): Driver[] {
     const sanitized = parsed.map((driver) => ({
       id: driver.id,
       name: driver.name,
+      pin: driver.pin ?? "",
       truckReg: driver.truckReg ?? "",
       active: driver.active !== false,
       syncStatus: driver.syncStatus,
@@ -281,11 +283,7 @@ const syncAllDriversCurrentWeekEntries = async () => {
 
   const loadFromSupabase = async () => {
     setSyncing(true)
-    const { data, error } = await supabase
-  .from("drivers")
-  .select("id, name, active, truck_reg")
-      .order("active", { ascending: false })
-      .order("name", { ascending: true })
+    const { data, error } = await supabase.rpc("boss_list_drivers")
 
     if (error) {
       console.log("LOAD DRIVERS ERROR:", error)
@@ -294,9 +292,16 @@ const syncAllDriversCurrentWeekEntries = async () => {
       return
     }
 
- const remoteDrivers: Driver[] = (data ?? []).map((driver) => ({
+ const remoteDrivers: Driver[] = (data as Array<{
+  id: number
+  name: string
+  pin: string | null
+  truck_reg: string | null
+  active: boolean | null
+}> ?? []).map((driver) => ({
   id: driver.id,
   name: driver.name,
+  pin: driver.pin ?? "",
   truckReg: driver.truck_reg ?? "",
   active: driver.active !== false,
   syncStatus: "synced",
@@ -472,7 +477,7 @@ className={`relative rounded-[18px] border border-green-400 p-3 pb-6 ...
     </p>
 
     <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
-      PIN: protected
+      PIN: {driver.pin || "not set"}
     </p>
 
     <p className="h-[18px] text-[13px] text-zinc-400 leading-tight">
