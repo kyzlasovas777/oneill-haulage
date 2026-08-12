@@ -18,13 +18,11 @@ export default function Home() {
   const [screen, setScreen] = useState<"login" | "driver" | "admin">("login")
   const [activeDriver, setActiveDriver] = useState<DriverIdentity | null>(null)
   const [openedFromBoss, setOpenedFromBoss] = useState(false)
+  const [restoring, setRestoring] = useState(true)
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then(() => console.log("SW registered"))
-        .catch((err) => console.log("SW error", err))
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined)
     }
   }, [])
 
@@ -47,12 +45,15 @@ export default function Home() {
             localStorage.removeItem("lastDriver")
           }
         }
+
+        if (!cancelled) setRestoring(false)
         return
       }
 
       const { data: sessionData } = await supabase.auth.getSession()
       if (!sessionData.session) {
         localStorage.removeItem("lastDriver")
+        if (!cancelled) setRestoring(false)
         return
       }
 
@@ -63,6 +64,7 @@ export default function Home() {
       if (error || !identity?.active) {
         await supabase.auth.signOut()
         localStorage.removeItem("lastDriver")
+        if (!cancelled) setRestoring(false)
         return
       }
 
@@ -70,6 +72,7 @@ export default function Home() {
         setActiveDriver(null)
         setOpenedFromBoss(false)
         setScreen("admin")
+        setRestoring(false)
         return
       }
 
@@ -85,6 +88,8 @@ export default function Home() {
         setOpenedFromBoss(false)
         setScreen("driver")
       }
+
+      if (!cancelled) setRestoring(false)
     }
 
     void restoreSession()
@@ -99,6 +104,12 @@ export default function Home() {
     setActiveDriver(null)
     setOpenedFromBoss(false)
     setScreen("login")
+  }
+
+  if (restoring) {
+    return (
+      <main className="min-h-screen bg-white" aria-hidden="true" />
+    )
   }
 
   if (screen === "login") {
