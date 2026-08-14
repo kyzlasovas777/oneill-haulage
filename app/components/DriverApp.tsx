@@ -11,6 +11,11 @@ import {
   hydratePrivatePhotoUrls,
   uploadPrivatePhoto,
 } from "./privatePhotoStorage"
+import {
+  loadQueuedPhotos,
+  removeQueuedPhotos,
+  saveQueuedPhotos,
+} from "./localPhotoQueue"
 
 type Entry = {
   id: number
@@ -22,6 +27,7 @@ type Entry = {
   note: string
   regNumber?: string
   localPhotos?: string[]
+  photoQueueId?: number
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
@@ -136,6 +142,7 @@ export default function DriverApp({
   const listRef = useRef<HTMLDivElement | null>(null)
  
   const [saving, setSaving] = useState(false)
+  const entrySyncRunningRef = useRef(false)
 
   const entriesStorageKey = `oneill-entries-${driverId}`
   const archivesStorageKey = `oneill-archives-${driverId}`
@@ -306,16 +313,39 @@ const visibleTitle =
     ? formatWeekTitle(activeArchive.title)
     : displayWeekTitle
 
-    const uploadLocalPhotosForEntry = async (entryId: number, localPhotos?: string[]) => {
+const isAlreadyExistsError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.toLowerCase().includes("already exists")
+}
+
+const uploadLocalPhotosForEntry = async (
+  entryId: number,
+  queueId: number,
+  localPhotos?: string[]
+) => {
   if (!localPhotos || localPhotos.length === 0) return
 
   for (let i = 0; i < localPhotos.length; i++) {
+    const filePath = `${driverId}/${entryId}/queued-${queueId}-${i}.jpg`
+
+    const { data: existingPhoto, error: existingPhotoError } = await supabase
+      .from("entry_photos")
+      .select("id")
+      .eq("entry_id", entryId)
+      .eq("file_path", filePath)
+      .maybeSingle()
+
+    if (existingPhotoError) throw existingPhotoError
+    if (existingPhoto) continue
+
     const response = await fetch(localPhotos[i])
     const blob = await response.blob()
 
-    const filePath = `${driverId}/${entryId}/${Date.now()}-${i}.jpg`
-
-    await uploadPrivatePhoto(filePath, blob)
+    try {
+      await uploadPrivatePhoto(filePath, blob)
+    } catch (uploadError) {
+      if (!isAlreadyExistsError(uploadError)) throw uploadError
+    }
 
     const { error: photoInsertError } = await supabase
       .from("entry_photos")
@@ -348,7 +378,7 @@ const loadTrucks = async () => {
   setTrucks((data ?? []).map((truck) => truck.reg))
 }
 
-  const syncEntries = async () => {
+  const syncEntriesInternal = async () => {
     if (screen !== "main") return
 
     setSyncing(true)
@@ -383,8 +413,34 @@ const loadTrucks = async () => {
             return
           }
 
+          const queueId = entry.photoQueueId ?? entry.id
+          const queuedPhotos = await loadQueuedPhotos(driverId, queueId).catch(
+            () => undefined
+          )
+          const localPhotos = queuedPhotos ?? entry.localPhotos
+
+          const reserved = loadFromStorage<Entry[]>(entriesStorageKey, []).map(
+            (item) =>
+              item.id === entry.id
+                ? {
+                    ...item,
+                    id: data.id,
+                    photoQueueId: queueId,
+                    syncStatus: "pending" as const,
+                  }
+                : item
+          )
+
+          setEntries(reserved)
           try {
-  await uploadLocalPhotosForEntry(data.id, entry.localPhotos)
+            localStorage.setItem(entriesStorageKey, JSON.stringify(reserved))
+          } catch (storageError) {
+            console.log("ENTRY STORAGE ERROR:", storageError)
+          }
+
+          try {
+  await uploadLocalPhotosForEntry(data.id, queueId, localPhotos)
+  await removeQueuedPhotos(driverId, queueId)
 } catch (photoError) {
   console.log("PHOTO SYNC ERROR:", photoError)
   setSyncText("Photo sync error")
@@ -393,13 +449,22 @@ const loadTrucks = async () => {
 }
 
           const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-            item.id === entry.id
-           ? { ...item, id: data.id, localPhotos: [], syncStatus: "synced" as const }
+            item.id === data.id
+           ? {
+               ...item,
+               localPhotos: [],
+               photoQueueId: undefined,
+               syncStatus: "synced" as const,
+             }
               : item
           )
 
           setEntries(updated)
-          localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+          try {
+            localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+          } catch (storageError) {
+            console.log("ENTRY STORAGE ERROR:", storageError)
+          }
         } else {
           const { error } = await supabase
             .from("entries")
@@ -421,9 +486,16 @@ const loadTrucks = async () => {
             return
           }
 
-          if (entry.localPhotos && entry.localPhotos.length > 0) {
+          const queueId = entry.photoQueueId ?? entry.id
+          const queuedPhotos = await loadQueuedPhotos(driverId, queueId).catch(
+            () => undefined
+          )
+          const localPhotos = queuedPhotos ?? entry.localPhotos
+
+          if (localPhotos && localPhotos.length > 0) {
   try {
-    await uploadLocalPhotosForEntry(entry.id, entry.localPhotos)
+    await uploadLocalPhotosForEntry(entry.id, queueId, localPhotos)
+    await removeQueuedPhotos(driverId, queueId)
   } catch (photoError) {
     console.log("PHOTO UPDATE ERROR:", photoError)
     setSyncText("Photo sync error")
@@ -437,17 +509,25 @@ const loadTrucks = async () => {
     ? {
         ...item,
         localPhotos: [],
+        photoQueueId: undefined,
         syncStatus: "synced" as const,
       }
     : item
 )
 
           setEntries(updated)
-          localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+          try {
+            localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+          } catch (storageError) {
+            console.log("ENTRY STORAGE ERROR:", storageError)
+          }
         }
       }
 
       if (entry.syncStatus === "delete_pending") {
+        const queueId = entry.photoQueueId ?? entry.id
+        await removeQueuedPhotos(driverId, queueId).catch(() => undefined)
+
         const { error } = await supabase.from("entries").delete().eq("id", entry.id)
 
         if (error) {
@@ -462,12 +542,31 @@ const loadTrucks = async () => {
         )
 
         setEntries(updated)
-        localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+        try {
+          localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
+        } catch (storageError) {
+          console.log("ENTRY STORAGE ERROR:", storageError)
+        }
       }
     }
 
     setSyncText("Synced")
     setSyncing(false)
+  }
+
+  const syncEntries = async () => {
+    if (entrySyncRunningRef.current) return
+
+    entrySyncRunningRef.current = true
+    try {
+      await syncEntriesInternal()
+    } catch (error) {
+      console.log("ENTRY SYNC UNEXPECTED ERROR:", error)
+      setSyncText("Sync error")
+      setSyncing(false)
+    } finally {
+      entrySyncRunningRef.current = false
+    }
   }
 
   const loadEntriesFromSupabase = async () => {
@@ -539,7 +638,11 @@ const loadTrucks = async () => {
   }
 
   useLayoutEffect(() => {
-    localStorage.setItem(entriesStorageKey, JSON.stringify(entries))
+    try {
+      localStorage.setItem(entriesStorageKey, JSON.stringify(entries))
+    } catch (storageError) {
+      console.log("ENTRY STORAGE ERROR:", storageError)
+    }
   }, [entries, entriesStorageKey])
 
   useEffect(() => {
@@ -924,7 +1027,12 @@ const filesToBase64 = async (files: File[]) => {
       reader.readAsDataURL(file)
     })
 
-  return Promise.all(files.map(compressFile))
+  const compressedPhotos: string[] = []
+  for (const file of files) {
+    compressedPhotos.push(await compressFile(file))
+  }
+
+  return compressedPhotos
 }
 
 const saveEntry = async () => {
@@ -944,6 +1052,8 @@ const saveEntry = async () => {
 
   const entryDate = oldEntry?.date ?? formatEntryDate(new Date())
   const localId = savedEditingId ?? Date.now()
+  const photoQueueId =
+    savedPhotoFiles.length > 0 ? Date.now() : oldEntry?.photoQueueId
 
   const nextEntries: Entry[] = savedEditingId
     ? visibleEntries.map((entry) =>
@@ -953,6 +1063,7 @@ const saveEntry = async () => {
               ...savedNewEntry,
               date: entryDate,
               regNumber: savedNewEntry.regNumber || driverTruck,
+              photoQueueId,
               syncStatus: "pending" as const,
             }
           : entry
@@ -965,17 +1076,21 @@ const saveEntry = async () => {
           ...savedNewEntry,
           regNumber: savedNewEntry.regNumber || driverTruck,
           localPhotos: [],
+          photoQueueId,
           syncStatus: "pending",
         },
       ]
 
   updateVisibleEntries(nextEntries)
-  localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+  try {
+    localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+  } catch (storageError) {
+    console.log("ENTRY STORAGE ERROR:", storageError)
+  }
 
   setShowModal(false)
   setEditingId(null)
   clearPhotos()
-  setSaving(false)
 
 setNewEntry({
   trailer: "",
@@ -993,14 +1108,22 @@ setNewEntry({
     try {
       const localPhotos = await filesToBase64(savedPhotoFiles)
 
+      if (photoQueueId !== undefined && localPhotos.length > 0) {
+        await saveQueuedPhotos(driverId, photoQueueId, localPhotos)
+      }
+
       const withPhotos = loadFromStorage<Entry[]>(entriesStorageKey, []).map((entry) =>
         entry.id === localId
-          ? { ...entry, localPhotos, syncStatus: "pending" as const }
+          ? { ...entry, localPhotos: [], photoQueueId, syncStatus: "pending" as const }
           : entry
       )
 
       setEntries(withPhotos)
-      localStorage.setItem(entriesStorageKey, JSON.stringify(withPhotos))
+      try {
+        localStorage.setItem(entriesStorageKey, JSON.stringify(withPhotos))
+      } catch (storageError) {
+        console.log("ENTRY STORAGE ERROR:", storageError)
+      }
 
       if (navigator.onLine && screen === "main") {
         await syncEntries()
@@ -1012,6 +1135,8 @@ setNewEntry({
       console.log("BACKGROUND SAVE ERROR:", error)
       setSyncText("Photo prepare error")
       setSyncing(false)
+    } finally {
+      setSaving(false)
     }
   }, 100)
 }
@@ -1020,8 +1145,10 @@ setNewEntry({
     const confirmed = confirm("Delete this entry?")
     if (!confirmed) return
 
+    const isLocalOnly = entryToDelete.id > 1000000000000
+
     const nextEntries =
-      entryToDelete.syncStatus === "pending"
+      entryToDelete.syncStatus === "pending" && isLocalOnly
         ? visibleEntries.filter((entry) => entry.id !== entryToDelete.id)
         : visibleEntries.map((entry) =>
             entry.id === entryToDelete.id
@@ -1030,7 +1157,14 @@ setNewEntry({
           )
 
     updateVisibleEntries(nextEntries)
-    localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+    const queueId = entryToDelete.photoQueueId ?? entryToDelete.id
+    await removeQueuedPhotos(driverId, queueId).catch(() => undefined)
+
+    try {
+      localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
+    } catch (storageError) {
+      console.log("ENTRY STORAGE ERROR:", storageError)
+    }
 
     setTimeout(() => {
       if (navigator.onLine) syncEntries()
