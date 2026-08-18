@@ -28,6 +28,7 @@ type Entry = {
   regNumber?: string
   localPhotos?: string[]
   photoQueueId?: number
+  clientSyncId?: string
   syncStatus?: "synced" | "pending" | "delete_pending"
 }
 
@@ -132,6 +133,44 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+function getSyncStatusPriority(status?: Entry["syncStatus"]) {
+  if (status === "delete_pending") return 3
+  if (status === "pending") return 2
+  if (status === "synced") return 1
+  return 0
+}
+
+function dedupeEntriesById(items: Entry[]) {
+  const byId = new Map<number, Entry>()
+
+  for (const item of items) {
+    const existing = byId.get(item.id)
+    if (!existing) {
+      byId.set(item.id, item)
+      continue
+    }
+
+    const preferItem =
+      getSyncStatusPriority(item.syncStatus) >=
+      getSyncStatusPriority(existing.syncStatus)
+    const preferred = preferItem ? item : existing
+    const fallback = preferItem ? existing : item
+
+    byId.set(item.id, {
+      ...fallback,
+      ...preferred,
+      clientSyncId: preferred.clientSyncId ?? fallback.clientSyncId,
+      photoQueueId: preferred.photoQueueId ?? fallback.photoQueueId,
+      localPhotos:
+        preferred.localPhotos && preferred.localPhotos.length > 0
+          ? preferred.localPhotos
+          : fallback.localPhotos,
+    })
+  }
+
+  return Array.from(byId.values())
+}
+
 export default function DriverApp({
   driverId,
   driverName,
@@ -166,7 +205,9 @@ const displayWeekTitle = formatWeekTitle(currentWeekTitle)
   const currentDate = formatEntryDate(today)
 
  const [entries, setEntries] = useState<Entry[]>(() =>
-  loadFromStorage<Entry[]>(entriesStorageKey, []).sort((a, b) => a.id - b.id)
+  dedupeEntriesById(loadFromStorage<Entry[]>(entriesStorageKey, [])).sort(
+    (a, b) => a.id - b.id
+  )
 )
 
   const [archives, setArchives] = useState<WeekArchive[]>(() =>
@@ -384,26 +425,62 @@ const loadTrucks = async () => {
     setSyncing(true)
     setSyncText("Syncing...")
 
-    const localEntries = loadFromStorage<Entry[]>(entriesStorageKey, [])
+    const storedEntries = loadFromStorage<Entry[]>(entriesStorageKey, [])
+    const localEntries = dedupeEntriesById(storedEntries)
 
-    for (const entry of localEntries) {
+    if (localEntries.length !== storedEntries.length) {
+      setEntries(localEntries)
+      try {
+        localStorage.setItem(entriesStorageKey, JSON.stringify(localEntries))
+      } catch (storageError) {
+        console.log("ENTRY STORAGE ERROR:", storageError)
+      }
+    }
+
+    for (const storedEntry of localEntries) {
+      let entry = storedEntry
+
       if (entry.syncStatus === "pending") {
         const isLocalOnly = entry.id > 1000000000000
 
         if (isLocalOnly) {
+          let clientSyncId = entry.clientSyncId
+
+          if (!clientSyncId) {
+            clientSyncId = crypto.randomUUID()
+            entry = { ...entry, clientSyncId }
+
+            const identified = dedupeEntriesById(
+              loadFromStorage<Entry[]>(entriesStorageKey, [])
+            ).map((item) =>
+              item.id === entry.id ? { ...item, clientSyncId } : item
+            )
+
+            setEntries(identified)
+            try {
+              localStorage.setItem(entriesStorageKey, JSON.stringify(identified))
+            } catch (storageError) {
+              console.log("ENTRY STORAGE ERROR:", storageError)
+            }
+          }
+
           const { data, error } = await supabase
             .from("entries")
-            .insert({
-              driver_id: driverId,
-              entry_date: entry.date,
-              trailer: entry.trailer,
-              reg_number: entry.regNumber ?? driverTruck,
-              from_place: entry.from,
-              to_place: entry.to,
-              status: entry.status,
-              note: entry.note,
-            })
-            .select("id")
+            .upsert(
+              {
+                driver_id: driverId,
+                entry_date: entry.date,
+                trailer: entry.trailer,
+                reg_number: entry.regNumber ?? driverTruck,
+                from_place: entry.from,
+                to_place: entry.to,
+                status: entry.status,
+                note: entry.note,
+                client_sync_id: clientSyncId,
+              },
+              { onConflict: "driver_id,client_sync_id" }
+            )
+            .select("id, client_sync_id")
             .single()
 
           if (error) {
@@ -419,16 +496,20 @@ const loadTrucks = async () => {
           )
           const localPhotos = queuedPhotos ?? entry.localPhotos
 
-          const reserved = loadFromStorage<Entry[]>(entriesStorageKey, []).map(
-            (item) =>
+          const reserved = dedupeEntriesById(
+            dedupeEntriesById(
+              loadFromStorage<Entry[]>(entriesStorageKey, [])
+            ).map((item) =>
               item.id === entry.id
                 ? {
                     ...item,
                     id: data.id,
+                    clientSyncId: data.client_sync_id ?? clientSyncId,
                     photoQueueId: queueId,
                     syncStatus: "pending" as const,
                   }
                 : item
+            )
           )
 
           setEntries(reserved)
@@ -448,15 +529,17 @@ const loadTrucks = async () => {
   return
 }
 
-          const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-            item.id === data.id
-           ? {
-               ...item,
-               localPhotos: [],
-               photoQueueId: undefined,
-               syncStatus: "synced" as const,
-             }
-              : item
+          const updated = dedupeEntriesById(
+            loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
+              item.id === data.id
+             ? {
+                 ...item,
+                 localPhotos: [],
+                 photoQueueId: undefined,
+                 syncStatus: "synced" as const,
+               }
+                : item
+            )
           )
 
           setEntries(updated)
@@ -504,16 +587,18 @@ const loadTrucks = async () => {
   }
 }
 
-        const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-  item.id === entry.id
-    ? {
-        ...item,
-        localPhotos: [],
-        photoQueueId: undefined,
-        syncStatus: "synced" as const,
-      }
-    : item
-)
+        const updated = dedupeEntriesById(
+          loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
+            item.id === entry.id
+              ? {
+                  ...item,
+                  localPhotos: [],
+                  photoQueueId: undefined,
+                  syncStatus: "synced" as const,
+                }
+              : item
+          )
+        )
 
           setEntries(updated)
           try {
@@ -537,8 +622,10 @@ const loadTrucks = async () => {
           return
         }
 
-        const updated = loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
-          (item) => item.id !== entry.id
+        const updated = dedupeEntriesById(
+          loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
+            (item) => item.id !== entry.id
+          )
         )
 
         setEntries(updated)
@@ -572,7 +659,7 @@ const loadTrucks = async () => {
   const loadEntriesFromSupabase = async () => {
     const { data, error } = await supabase
       .from("entries")
-     .select("id, entry_date, trailer, from_place, to_place, status, note, reg_number")
+     .select("id, entry_date, trailer, from_place, to_place, status, note, reg_number, client_sync_id")
       .eq("driver_id", driverId)
       .order("id", { ascending: true })
 
@@ -582,8 +669,12 @@ const loadTrucks = async () => {
       return
     }
 
-    const localPending = loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
-      (entry) => entry.syncStatus === "pending" || entry.syncStatus === "delete_pending"
+    const localPending = dedupeEntriesById(
+      loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
+        (entry) =>
+          entry.syncStatus === "pending" ||
+          entry.syncStatus === "delete_pending"
+      )
     )
 
   const remoteEntries: Entry[] = (data ?? []).map((entry) => ({
@@ -595,10 +686,42 @@ const loadTrucks = async () => {
   to: entry.to_place,
   status: entry.status,
   note: entry.note,
+  clientSyncId: entry.client_sync_id ?? undefined,
   syncStatus: "synced",
 }))
 
-    const allEntries = [...remoteEntries, ...localPending]
+    const remoteById = new Map(remoteEntries.map((entry) => [entry.id, entry]))
+    const remoteByClientSyncId = new Map(
+      remoteEntries
+        .filter((entry) => entry.clientSyncId)
+        .map((entry) => [entry.clientSyncId!, entry])
+    )
+    const shadowedRemoteIds = new Set<number>()
+
+    const reconciledPending = localPending.map((localEntry) => {
+      const remoteMatch =
+        remoteById.get(localEntry.id) ??
+        (localEntry.clientSyncId
+          ? remoteByClientSyncId.get(localEntry.clientSyncId)
+          : undefined)
+
+      if (!remoteMatch) return localEntry
+
+      shadowedRemoteIds.add(remoteMatch.id)
+
+      return {
+        ...remoteMatch,
+        ...localEntry,
+        id: remoteMatch.id,
+        clientSyncId: localEntry.clientSyncId ?? remoteMatch.clientSyncId,
+        syncStatus: localEntry.syncStatus,
+      }
+    })
+
+    const allEntries = dedupeEntriesById([
+      ...remoteEntries.filter((entry) => !shadowedRemoteIds.has(entry.id)),
+      ...reconciledPending,
+    ])
 
   const currentWeekEntries = allEntries
   .filter(
@@ -635,6 +758,19 @@ const loadTrucks = async () => {
     localStorage.setItem(archivesStorageKey, JSON.stringify(nextArchives))
 
     setSyncText("Loaded")
+
+    if (
+      navigator.onLine &&
+      currentWeekEntries.some(
+        (entry) =>
+          entry.syncStatus === "pending" ||
+          entry.syncStatus === "delete_pending"
+      )
+    ) {
+      setTimeout(() => {
+        void syncEntries()
+      }, 0)
+    }
   }
 
   useLayoutEffect(() => {
@@ -1054,32 +1190,38 @@ const saveEntry = async () => {
   const localId = savedEditingId ?? Date.now()
   const photoQueueId =
     savedPhotoFiles.length > 0 ? Date.now() : oldEntry?.photoQueueId
+  const clientSyncId =
+    oldEntry?.clientSyncId ?? (!savedEditingId ? crypto.randomUUID() : undefined)
 
-  const nextEntries: Entry[] = savedEditingId
-    ? visibleEntries.map((entry) =>
-        entry.id === savedEditingId
-          ? {
-              ...entry,
-              ...savedNewEntry,
-              date: entryDate,
-              regNumber: savedNewEntry.regNumber || driverTruck,
-              photoQueueId,
-              syncStatus: "pending" as const,
-            }
-          : entry
-      )
-    : [
-        ...visibleEntries,
-        {
-          id: localId,
-          date: entryDate,
-          ...savedNewEntry,
-          regNumber: savedNewEntry.regNumber || driverTruck,
-          localPhotos: [],
-          photoQueueId,
-          syncStatus: "pending",
-        },
-      ]
+  const nextEntries: Entry[] = dedupeEntriesById(
+    savedEditingId
+      ? visibleEntries.map((entry) =>
+          entry.id === savedEditingId
+            ? {
+                ...entry,
+                ...savedNewEntry,
+                date: entryDate,
+                regNumber: savedNewEntry.regNumber || driverTruck,
+                photoQueueId,
+                clientSyncId: entry.clientSyncId ?? clientSyncId,
+                syncStatus: "pending" as const,
+              }
+            : entry
+        )
+      : [
+          ...visibleEntries,
+          {
+            id: localId,
+            date: entryDate,
+            ...savedNewEntry,
+            regNumber: savedNewEntry.regNumber || driverTruck,
+            localPhotos: [],
+            photoQueueId,
+            clientSyncId,
+            syncStatus: "pending",
+          },
+        ]
+  )
 
   updateVisibleEntries(nextEntries)
   try {
@@ -1112,10 +1254,18 @@ setNewEntry({
         await saveQueuedPhotos(driverId, photoQueueId, localPhotos)
       }
 
-      const withPhotos = loadFromStorage<Entry[]>(entriesStorageKey, []).map((entry) =>
-        entry.id === localId
-          ? { ...entry, localPhotos: [], photoQueueId, syncStatus: "pending" as const }
-          : entry
+      const withPhotos = dedupeEntriesById(
+        loadFromStorage<Entry[]>(entriesStorageKey, []).map((entry) =>
+          entry.id === localId
+            ? {
+                ...entry,
+                localPhotos: [],
+                photoQueueId,
+                clientSyncId: entry.clientSyncId ?? clientSyncId,
+                syncStatus: "pending" as const,
+              }
+            : entry
+        )
       )
 
       setEntries(withPhotos)
@@ -1147,7 +1297,7 @@ setNewEntry({
 
     const isLocalOnly = entryToDelete.id > 1000000000000
 
-    const nextEntries =
+    const nextEntries = dedupeEntriesById(
       entryToDelete.syncStatus === "pending" && isLocalOnly
         ? visibleEntries.filter((entry) => entry.id !== entryToDelete.id)
         : visibleEntries.map((entry) =>
@@ -1155,6 +1305,7 @@ setNewEntry({
               ? { ...entry, syncStatus: "delete_pending" as const }
               : entry
           )
+    )
 
     updateVisibleEntries(nextEntries)
     const queueId = entryToDelete.photoQueueId ?? entryToDelete.id
