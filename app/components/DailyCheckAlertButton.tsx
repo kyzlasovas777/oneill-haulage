@@ -141,11 +141,32 @@ export default function DailyCheckAlertButton({
           setOpen(true)
           void loadUnseenChecks().finally(() => setLoading(false))
         }}
-        className="inline-flex h-[22px] items-center justify-center gap-0.5 rounded-full px-0.5 text-red-600 active:scale-95"
+        className="inline-flex h-[24px] items-center justify-center gap-1 px-0.5 text-red-600 active:scale-95"
         aria-label={`${checks.length} unseen Daily Check${checks.length === 1 ? "" : "s"} for ${driverName}`}
       >
-        <span className="text-[22px] font-black leading-none">!</span>
-        <span className="min-w-[16px] h-[16px] rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-[16px] text-white">
+        <span className="inline-flex h-[22px] w-[24px] items-center justify-center" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 22"
+            className="h-[22px] w-[24px]"
+            fill="none"
+          >
+            <path
+              d="M12 1.5L22.2 19.5H1.8L12 1.5Z"
+              fill="white"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 7V13"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+            <circle cx="12" cy="16.4" r="1.05" fill="currentColor" />
+          </svg>
+        </span>
+        <span className="text-[13px] font-bold leading-none text-red-600">
           {checks.length > 99 ? "99+" : checks.length}
         </span>
       </button>
