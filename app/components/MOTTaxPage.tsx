@@ -54,10 +54,7 @@ function statusTextClass(days: number | null) {
   return "text-green-600"
 }
 
-function borderClass(days: number | null) {
-  if (days === null) return "border-zinc-300"
-  if (days <= 30) return "border-red-400"
-  if (days <= 60) return "border-amber-400"
+function borderClass() {
   return "border-green-400"
 }
 
@@ -196,9 +193,7 @@ export default function MOTTaxPage({ onBack }: MOTTaxPageProps) {
                 <button
                   key={truck.id}
                   onClick={() => openEdit(truck)}
-                  className={`w-full rounded-[18px] border ${borderClass(
-                    nearest
-                  )} bg-[#f5f5f5] px-3 py-2.5 text-left active:scale-[0.99]`}
+                  className={`w-full rounded-[18px] border ${borderClass()} bg-[#f5f5f5] px-3 py-2.5 text-left active:scale-[0.99]`}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-3">
                     <span className="text-[19px] font-extrabold text-black leading-tight">
