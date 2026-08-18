@@ -5,6 +5,7 @@ import { supabase } from "./supabase"
 import TrucksManager from "./TrucksManager"
 import ServicePage from "./ServicePage"
 import BossDailyChecksPage from "./BossDailyChecksPage"
+import DailyCheckAlertButton from "./DailyCheckAlertButton"
 
 type Driver = {
   id: number
@@ -486,9 +487,12 @@ className={`relative rounded-[18px] border border-green-400 p-3 pb-6 ...
   </div>
 
   <div className="space-y-1 text-right">
-    <p className="h-[22px] text-[15px] font-extrabold text-black leading-tight">
-      {driver.truckReg || ""}
-    </p>
+    <div className="h-[22px] flex items-center justify-end gap-1.5">
+      <DailyCheckAlertButton driverId={driver.id} driverName={driver.name} />
+      <p className="text-[15px] font-extrabold text-black leading-tight">
+        {driver.truckReg || ""}
+      </p>
+    </div>
 
     <p className="h-[18px] text-[13px] text-zinc-500 leading-tight">
       {driver.truckReg && dieselStats[driver.truckReg]
