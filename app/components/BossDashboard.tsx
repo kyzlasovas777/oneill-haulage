@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import TrucksManager from "./TrucksManager"
 import ServicePage from "./ServicePage"
+import MOTTaxPage from "./MOTTaxPage"
 import BossDailyChecksPage from "./BossDailyChecksPage"
 import DailyCheckAlertButton from "./DailyCheckAlertButton"
 
@@ -113,6 +114,7 @@ export default function BossDashboard({
   const [driverPin, setDriverPin] = useState("")
 const [driverTruck, setDriverTruck] = useState("")
 const [showServicePage, setShowServicePage] = useState(false)
+const [showMOTTaxPage, setShowMOTTaxPage] = useState(false)
 const [showDailyChecksPage, setShowDailyChecksPage] = useState(false)
 
 const [trucks, setTrucks] = useState<string[]>([])
@@ -424,6 +426,10 @@ setShowAddDriver(false)
   return <ServicePage onBack={() => setShowServicePage(false)} />
 }
 
+  if (showMOTTaxPage) {
+    return <MOTTaxPage onBack={() => setShowMOTTaxPage(false)} />
+  }
+
   if (showDailyChecksPage) {
     return (
       <BossDailyChecksPage
@@ -553,6 +559,17 @@ Trucks
 >
 <span className="w-6 text-center text-[22px]">🛠️</span>  
   Service
+</button>
+
+<button
+  onClick={() => {
+    setShowBossMenu(false)
+    setShowMOTTaxPage(true)
+  }}
+  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+>
+  <span className="w-6 text-center text-[22px]">📅</span>
+  MOT & Tax
 </button>
 
 <button
