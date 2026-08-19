@@ -187,7 +187,6 @@ export default function MOTTaxPage({ onBack }: MOTTaxPageProps) {
             {sortedTrucks.map((truck) => {
               const motDays = daysUntil(truck.mot_expiry)
               const taxDays = daysUntil(truck.road_tax_expiry)
-              const nearest = nearestDays(truck)
 
               return (
                 <button
@@ -195,12 +194,9 @@ export default function MOTTaxPage({ onBack }: MOTTaxPageProps) {
                   onClick={() => openEdit(truck)}
                   className={`w-full rounded-[18px] border ${borderClass()} bg-[#f5f5f5] px-3 py-2.5 text-left active:scale-[0.99]`}
                 >
-                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <div className="mb-1.5">
                     <span className="text-[19px] font-extrabold text-black leading-tight">
                       {truck.reg}
-                    </span>
-                    <span className={`text-[12px] font-bold ${statusTextClass(nearest)}`}>
-                      {nearest === null ? "Dates not set" : daysLabel(nearest)}
                     </span>
                   </div>
 
