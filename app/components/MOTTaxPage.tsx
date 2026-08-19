@@ -49,7 +49,7 @@ function daysLabel(days: number | null) {
 
 function statusTextClass(days: number | null) {
   if (days === null) return "text-zinc-400"
-  if (days <= 15) return "text-red-600"
+  if (days <= 0) return "text-red-600"
   if (days <= 30) return "text-amber-500"
   return "text-green-600"
 }
