@@ -69,6 +69,7 @@ export default function DailyCheckAlertButton({
         "id, driver_id, entry_date, checked_at, reg_number, status, safe_to_drive, defects, boss_seen_at"
       )
       .eq("driver_id", driverId)
+      .eq("status", "defect_reported")
       .is("boss_seen_at", null)
       .order("checked_at", { ascending: false })
 
@@ -189,7 +190,7 @@ export default function DailyCheckAlertButton({
                 <h2 className="text-[22px] font-bold text-black">Daily Checks</h2>
                 <p className="text-[15px] font-semibold text-zinc-600">{driverName}</p>
                 <p className="text-[13px] text-red-600">
-                  {checks.length} new check{checks.length === 1 ? "" : "s"}
+                  {checks.length} new issue{checks.length === 1 ? "" : "s"}
                 </p>
               </div>
               <button
@@ -209,11 +210,7 @@ export default function DailyCheckAlertButton({
               {checks.map((check) => (
                 <div
                   key={check.id}
-                  className={`rounded-[18px] border p-3 ${
-                    check.status === "defect_reported"
-                      ? "border-red-400 bg-red-50"
-                      : "border-green-400 bg-[#f7f7f7]"
-                  }`}
+                  className="rounded-[18px] border border-red-400 bg-red-50 p-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -228,13 +225,9 @@ export default function DailyCheckAlertButton({
                   </div>
 
                   <div className="mt-2 font-bold">
-                    {check.status === "no_defects" ? (
-                      <span className="text-green-600">✓ No defects</span>
-                    ) : (
-                      <span className="text-red-600">
-                        ! {check.defects.length} defect{check.defects.length === 1 ? "" : "s"}
-                      </span>
-                    )}
+                    <span className="text-red-600">
+                      ! {check.defects.length} defect{check.defects.length === 1 ? "" : "s"}
+                    </span>
                     {!check.safe_to_drive && (
                       <span className="ml-2 text-[12px] text-red-700">UNSAFE TO DRIVE</span>
                     )}
