@@ -910,7 +910,7 @@ async function runSync(driverId: number) {
 
     await syncMileageEntriesGlobal(driverId)
 
-    if (globalSyncIsBoss) {
+    if (globalSyncIsBoss || driverId === 0) {
       await syncServiceEntriesGlobal()
     }
 
