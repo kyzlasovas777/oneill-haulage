@@ -341,6 +341,10 @@ const loadItems = async (truckId: number) => {
 useEffect(() => {
   loadTrucks()
   loadAllItems()
+
+  if (navigator.onLine) {
+    triggerOneillGlobalSync(0)
+  }
 }, [])
 
 useEffect(() => {
