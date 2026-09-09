@@ -6,6 +6,7 @@ import MilesPage from "./MilesPage"
 import DieselPage from "./DieselPage"
 import DailyCheckPage from "./DailyCheckPage"
 import * as XLSX from "xlsx-js-style"
+import { exportToDaveExcel } from "./exportToDaveExcel"
 import { startOneillGlobalSync } from "./oneillGlobalSync"
 import {
   hydratePrivatePhotoUrls,
@@ -1601,13 +1602,29 @@ Add Place
 </button>
 
 {isBoss && screen === "main" && (
-<button
-  onClick={exportToExcel}
-  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
->
+<>
+  <button
+    onClick={() => {
+      setShowMainMenu(false)
+      exportToExcel()
+    }}
+    className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+  >
     <span className="w-6 text-center text-[22px]">📊</span>
-    Export to Excel
+    Excel Original
   </button>
+
+  <button
+    onClick={() => {
+      setShowMainMenu(false)
+      void exportToDaveExcel(driverId, driverName)
+    }}
+    className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
+  >
+    <span className="w-6 text-center text-[22px]">📊</span>
+    Excel to Dave
+  </button>
+</>
 )}
 
           </div>
