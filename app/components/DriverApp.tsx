@@ -1,57 +1,31 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { supabase } from "./supabase"
-import MilesPage from "./MilesPage"
-import DieselPage from "./DieselPage"
-import DailyCheckPage from "./DailyCheckPage"
+import {
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react"
 import * as XLSX from "xlsx-js-style"
-import { startOneillGlobalSync } from "./oneillGlobalSync"
-import {
-  hydratePrivatePhotoUrls,
-  uploadPrivatePhoto,
-} from "./privatePhotoStorage"
-import {
-  loadQueuedPhotos,
-  removeQueuedPhotos,
-  saveQueuedPhotos,
-} from "./localPhotoQueue"
-
-type Entry = {
-  id: number
-  date: string
-  trailer: string
-  from: string
-  to: string
-  status: string
-  note: string
-  regNumber?: string
-  localPhotos?: string[]
-  photoQueueId?: number
-  clientSyncId?: string
-  syncStatus?: "synced" | "pending" | "delete_pending"
-}
-
-
-type EntryPhoto = {
-  id: string
-  entry_id: number
-  photo_url: string
-  file_path: string | null
-}
-
-type WeekArchive = {
-  id: number
-  title: string
-  date: string
-  entries: Entry[]
-}
+import DriverAppOriginal from "./DriverAppOriginal"
+import { supabase } from "./supabase"
 
 type DriverAppProps = {
   driverId: number
   driverName: string
   onBack?: () => void
   isBoss?: boolean
+}
+
+type DaveEntry = {
+  id: number
+  driverId: number
+  date: string
+  trailer: string
+  from: string
+  to: string
+  status: string
+  note: string
+  regNumber: string
 }
 
 function getWeekStart(date: Date) {
@@ -76,847 +50,197 @@ function formatEntryDate(date: Date) {
   return `${year}.${month}.${day}`
 }
 
-function formatDisplayDate(dateText: string) {
-  const [year, month, day] = dateText.split(".").map(Number)
-
-  const date = new Date(year, month - 1, day)
-
-  const weekday = date.toLocaleDateString("en-GB", {
-    weekday: "long",
-  })
-
-  return `${weekday} ${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.${year}`
-}
-
-function formatWeekTitle(weekTitle: string) {
-  const [start, end] = weekTitle.split(" - ")
-
-  const [startMonth, startDay] = start.split(".")
-  const [endMonth, endDay] = end.split(".")
-
-  return `${startDay}.${startMonth} - ${endDay}.${endMonth}`
-}
-
-function getWeekTitleFromEntryDate(dateText: string) {
-  const [year, month, day] = dateText.split(".").map(Number)
- const date = new Date(year, month - 1, day)
-date.setHours(12, 0, 0, 0)
-  const monday = getWeekStart(date)
-
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-
+function formatWeekTitle(monday: Date, sunday: Date) {
   const formatShort = (date: Date) => {
-    const month = String(date.getMonth() + 1).padStart(2, "0")
     const day = String(date.getDate()).padStart(2, "0")
-  return `${month}.${day}`
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    return `${day}.${month}`
   }
 
   return `${formatShort(monday)} - ${formatShort(sunday)}`
 }
 
-function shouldStartNewWeek() {
-  const now = new Date()
-  const day = now.getDay()
-  const hour = now.getHours()
-  return day === 1 && hour >= 1
+function parseEntryDate(dateText: string) {
+  const [year, month, day] = dateText.split(".").map(Number)
+  return new Date(year, month - 1, day)
 }
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback
-
-  try {
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : fallback
-  } catch {
-    return fallback
-  }
+function formatExcelDate(dateText: string) {
+  const date = parseEntryDate(dateText)
+  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
 }
 
-function getSyncStatusPriority(status?: Entry["syncStatus"]) {
-  if (status === "delete_pending") return 3
-  if (status === "pending") return 2
-  if (status === "synced") return 1
-  return 0
-}
-
-function dedupeEntriesById(items: Entry[]) {
-  const byId = new Map<number, Entry>()
-
-  for (const item of items) {
-    const existing = byId.get(item.id)
-    if (!existing) {
-      byId.set(item.id, item)
-      continue
-    }
-
-    const preferItem =
-      getSyncStatusPriority(item.syncStatus) >=
-      getSyncStatusPriority(existing.syncStatus)
-    const preferred = preferItem ? item : existing
-    const fallback = preferItem ? existing : item
-
-    byId.set(item.id, {
-      ...fallback,
-      ...preferred,
-      clientSyncId: preferred.clientSyncId ?? fallback.clientSyncId,
-      photoQueueId: preferred.photoQueueId ?? fallback.photoQueueId,
-      localPhotos:
-        preferred.localPhotos && preferred.localPhotos.length > 0
-          ? preferred.localPhotos
-          : fallback.localPhotos,
-    })
-  }
-
-  return Array.from(byId.values())
-}
-
-export default function DriverApp({
-  driverId,
-  driverName,
-  onBack,
-  isBoss = false,
-}: DriverAppProps) {
-  const bottomRef = useRef<HTMLDivElement | null>(null)
-  const listRef = useRef<HTMLDivElement | null>(null)
- 
-  const [saving, setSaving] = useState(false)
-  const entrySyncRunningRef = useRef(false)
-
-  const entriesStorageKey = `oneill-entries-${driverId}`
-  const archivesStorageKey = `oneill-archives-${driverId}`
-  const activeWeekStorageKey = `activeWeekTitle-${driverId}`
-
-  const today = new Date()
-  const monday = getWeekStart(today)
-
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-
-  const formatShort = (date: Date) => {
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    return `${month}.${day}`
-  }
-
-  const currentWeekTitle = `${formatShort(monday)} - ${formatShort(sunday)}`
-const displayWeekTitle = formatWeekTitle(currentWeekTitle)
-
-  const currentDate = formatEntryDate(today)
-
- const [entries, setEntries] = useState<Entry[]>(() =>
-  dedupeEntriesById(loadFromStorage<Entry[]>(entriesStorageKey, [])).sort(
-    (a, b) => a.id - b.id
-  )
-)
-
-  const [archives, setArchives] = useState<WeekArchive[]>(() =>
-    loadFromStorage<WeekArchive[]>(archivesStorageKey, [])
-  )
-
- const [screen, setScreen] = useState<
-  "main" |
-  "archives" |
-  "archive" |
-  "miles" |
-  "diesel" |
-  "dailyCheck"
->("main")
-
-  const [activeArchiveId, setActiveArchiveId] = useState<number | null>(null)
-
-  const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-
-  const [photoFiles, setPhotoFiles] = useState<File[]>([])
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
-  const [savedPhotos, setSavedPhotos] = useState<EntryPhoto[]>([])
-
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
-
-  useEffect(() => {
-  const viewport = document.querySelector("meta[name='viewport']")
-
-  if (!viewport) return
-
-  if (selectedPhoto) {
-    viewport.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes"
-    )
-  } else {
-    viewport.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-    )
-  }
-}, [selectedPhoto])
-
-const [previewEntry, setPreviewEntry] = useState<Entry | null>(null)
-const [previewPhotos, setPreviewPhotos] = useState<EntryPhoto[]>([])
-
-
-
-  const [showMainMenu, setShowMainMenu] = useState(false)
-
-  const [syncText, setSyncText] = useState("Offline ready")
-  const [syncing, setSyncing] = useState(false)
-  const [driverTruck, setDriverTruck] = useState("")
-const [trucks, setTrucks] = useState<string[]>([])
-
-useEffect(() => {
-  startOneillGlobalSync(driverId, isBoss)
-}, [driverId, isBoss])
-
-
-  useEffect(() => {
-  setNewEntry((prev) => ({
-    ...prev,
-    regNumber: driverTruck,
-  }))
-}, [driverTruck])
-
-
-
-  const [showPlaceModal, setShowPlaceModal] = useState(false)
-  const [newPlace, setNewPlace] = useState("")
-
-const DEFAULT_PLACES = [
-  "CnM",
-  "Stena",
-  "ST",
-  "Mcb Dub",
-  "B.E.Naas",
-  "Shercock",
-  "Enniskillen",
-  "Americold",
-  "Pulse",
-  "Alied Foods",
-  "Masterlink",
-  "Irish Ferry",
-  "An Post",
-  "DFDS Belfast",
-  "Belfast Stena",
-  "Tesco Ballymun",
-  "Turkeys Grove",
-  "Musgrave",
-  "Sam Dennigan",
-  "Belfast Stena Storage",
-  "Drogheda",
-  "Primeline",
-  "Larne PnO",
-  "Golden Bake Dublin",
-  "TIP Airport",
-  "DFS Dublin",
-  "Smyths Dundalk",
-]
-
- const PLACES_KEY = `oneill-places-${driverId}`
-
-const [places, setPlaces] = useState<string[]>(() => {
-  if (typeof window === "undefined") return DEFAULT_PLACES
-
-  try {
-    const saved = localStorage.getItem(PLACES_KEY)
-    return saved ? JSON.parse(saved) : DEFAULT_PLACES
-  } catch {
-    return DEFAULT_PLACES
-  }
-})
-
-useEffect(() => {
-  if (typeof window === "undefined") return
-
-  localStorage.setItem(
-    PLACES_KEY,
-    JSON.stringify(places)
-  )
-}, [places, PLACES_KEY])
-
-const [newEntry, setNewEntry] = useState({
-  trailer: "",
-  regNumber: driverTruck,
-  from: "CnM",
-  to: "Stena",
-  status: "L",
-  note: "",
-})
-
-  const activeArchive = archives.find((archive) => archive.id === activeArchiveId)
-
-  const visibleEntries =
-    screen === "archive" && activeArchive
-      ? activeArchive.entries.filter((entry) => entry.syncStatus !== "delete_pending")
-      : entries.filter((entry) => entry.syncStatus !== "delete_pending")
-
-const visibleTitle =
-  screen === "archive" && activeArchive
-    ? formatWeekTitle(activeArchive.title)
-    : displayWeekTitle
-
-const isAlreadyExistsError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.toLowerCase().includes("already exists")
-}
-
-const uploadLocalPhotosForEntry = async (
-  entryId: number,
-  queueId: number,
-  localPhotos?: string[]
-) => {
-  if (!localPhotos || localPhotos.length === 0) return
-
-  for (let i = 0; i < localPhotos.length; i++) {
-    const filePath = `${driverId}/${entryId}/queued-${queueId}-${i}.jpg`
-
-    const { data: existingPhoto, error: existingPhotoError } = await supabase
-      .from("entry_photos")
-      .select("id")
-      .eq("entry_id", entryId)
-      .eq("file_path", filePath)
-      .maybeSingle()
-
-    if (existingPhotoError) throw existingPhotoError
-    if (existingPhoto) continue
-
-    const response = await fetch(localPhotos[i])
-    const blob = await response.blob()
-
-    try {
-      await uploadPrivatePhoto(filePath, blob)
-    } catch (uploadError) {
-      if (!isAlreadyExistsError(uploadError)) throw uploadError
-    }
-
-    const { error: photoInsertError } = await supabase
-      .from("entry_photos")
-      .insert({
-        entry_id: entryId,
-        photo_url: filePath,
-        file_path: filePath,
-      })
-
-    if (photoInsertError) throw photoInsertError
-  }
-}
-
-const loadDriverTruck = async () => {
-  const { data } = await supabase
-    .from("drivers")
-    .select("truck_reg")
-    .eq("id", driverId)
-    .single()
-
-  setDriverTruck(data?.truck_reg ?? "")
-}
-
-const loadTrucks = async () => {
-  const { data } = await supabase
-    .from("trucks")
-    .select("reg")
-    .order("reg")
-
-  setTrucks((data ?? []).map((truck) => truck.reg))
-}
-
-  const syncEntriesInternal = async () => {
-    if (screen !== "main") return
-
-    setSyncing(true)
-    setSyncText("Syncing...")
-
-    const storedEntries = loadFromStorage<Entry[]>(entriesStorageKey, [])
-    const localEntries = dedupeEntriesById(storedEntries)
-
-    if (localEntries.length !== storedEntries.length) {
-      setEntries(localEntries)
-      try {
-        localStorage.setItem(entriesStorageKey, JSON.stringify(localEntries))
-      } catch (storageError) {
-        console.log("ENTRY STORAGE ERROR:", storageError)
-      }
-    }
-
-    for (const storedEntry of localEntries) {
-      let entry = storedEntry
-
-      if (entry.syncStatus === "pending") {
-        const isLocalOnly = entry.id > 1000000000000
-
-        if (isLocalOnly) {
-          let clientSyncId = entry.clientSyncId
-
-          if (!clientSyncId) {
-            clientSyncId = crypto.randomUUID()
-            entry = { ...entry, clientSyncId }
-
-            const identified = dedupeEntriesById(
-              loadFromStorage<Entry[]>(entriesStorageKey, [])
-            ).map((item) =>
-              item.id === entry.id ? { ...item, clientSyncId } : item
-            )
-
-            setEntries(identified)
-            try {
-              localStorage.setItem(entriesStorageKey, JSON.stringify(identified))
-            } catch (storageError) {
-              console.log("ENTRY STORAGE ERROR:", storageError)
-            }
-          }
-
-          const { data, error } = await supabase
-            .from("entries")
-            .upsert(
-              {
-                driver_id: driverId,
-                entry_date: entry.date,
-                trailer: entry.trailer,
-                reg_number: entry.regNumber ?? driverTruck,
-                from_place: entry.from,
-                to_place: entry.to,
-                status: entry.status,
-                note: entry.note,
-                client_sync_id: clientSyncId,
-              },
-              { onConflict: "driver_id,client_sync_id" }
-            )
-            .select("id, client_sync_id")
-            .single()
-
-          if (error) {
-            console.log("ENTRY SYNC ERROR:", error)
-            setSyncText("Sync error: " + error.message)
-            setSyncing(false)
-            return
-          }
-
-          const queueId = entry.photoQueueId ?? entry.id
-          const queuedPhotos = await loadQueuedPhotos(driverId, queueId).catch(
-            () => undefined
-          )
-          const localPhotos = queuedPhotos ?? entry.localPhotos
-
-          const reserved = dedupeEntriesById(
-            dedupeEntriesById(
-              loadFromStorage<Entry[]>(entriesStorageKey, [])
-            ).map((item) =>
-              item.id === entry.id
-                ? {
-                    ...item,
-                    id: data.id,
-                    clientSyncId: data.client_sync_id ?? clientSyncId,
-                    photoQueueId: queueId,
-                    syncStatus: "pending" as const,
-                  }
-                : item
-            )
-          )
-
-          setEntries(reserved)
-          try {
-            localStorage.setItem(entriesStorageKey, JSON.stringify(reserved))
-          } catch (storageError) {
-            console.log("ENTRY STORAGE ERROR:", storageError)
-          }
-
-          try {
-  await uploadLocalPhotosForEntry(data.id, queueId, localPhotos)
-  await removeQueuedPhotos(driverId, queueId)
-} catch (photoError) {
-  console.log("PHOTO SYNC ERROR:", photoError)
-  setSyncText("Photo sync error")
-  setSyncing(false)
-  return
-}
-
-          const updated = dedupeEntriesById(
-            loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-              item.id === data.id
-             ? {
-                 ...item,
-                 localPhotos: [],
-                 photoQueueId: undefined,
-                 syncStatus: "synced" as const,
-               }
-                : item
-            )
-          )
-
-          setEntries(updated)
-          try {
-            localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
-          } catch (storageError) {
-            console.log("ENTRY STORAGE ERROR:", storageError)
-          }
-        } else {
-          const { error } = await supabase
-            .from("entries")
-           .update({
-  entry_date: entry.date,
-  trailer: entry.trailer,
-  from_place: entry.from,
-  to_place: entry.to,
-  status: entry.status,
-  note: entry.note,
-  reg_number: entry.regNumber ?? "",
-})
-            .eq("id", entry.id)
-
-          if (error) {
-            console.log("ENTRY UPDATE ERROR:", error)
-            setSyncText("Sync error: " + error.message)
-            setSyncing(false)
-            return
-          }
-
-          const queueId = entry.photoQueueId ?? entry.id
-          const queuedPhotos = await loadQueuedPhotos(driverId, queueId).catch(
-            () => undefined
-          )
-          const localPhotos = queuedPhotos ?? entry.localPhotos
-
-          if (localPhotos && localPhotos.length > 0) {
-  try {
-    await uploadLocalPhotosForEntry(entry.id, queueId, localPhotos)
-    await removeQueuedPhotos(driverId, queueId)
-  } catch (photoError) {
-    console.log("PHOTO UPDATE ERROR:", photoError)
-    setSyncText("Photo sync error")
-    setSyncing(false)
-    return
-  }
-}
-
-        const updated = dedupeEntriesById(
-          loadFromStorage<Entry[]>(entriesStorageKey, []).map((item) =>
-            item.id === entry.id
-              ? {
-                  ...item,
-                  localPhotos: [],
-                  photoQueueId: undefined,
-                  syncStatus: "synced" as const,
-                }
-              : item
-          )
-        )
-
-          setEntries(updated)
-          try {
-            localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
-          } catch (storageError) {
-            console.log("ENTRY STORAGE ERROR:", storageError)
-          }
-        }
-      }
-
-      if (entry.syncStatus === "delete_pending") {
-        const queueId = entry.photoQueueId ?? entry.id
-        await removeQueuedPhotos(driverId, queueId).catch(() => undefined)
-
-        const { error } = await supabase.from("entries").delete().eq("id", entry.id)
-
-        if (error) {
-          console.log("ENTRY DELETE ERROR:", error)
-          setSyncText("Delete error: " + error.message)
-          setSyncing(false)
-          return
-        }
-
-        const updated = dedupeEntriesById(
-          loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
-            (item) => item.id !== entry.id
-          )
-        )
-
-        setEntries(updated)
-        try {
-          localStorage.setItem(entriesStorageKey, JSON.stringify(updated))
-        } catch (storageError) {
-          console.log("ENTRY STORAGE ERROR:", storageError)
-        }
-      }
-    }
-
-    setSyncText("Synced")
-    setSyncing(false)
-  }
-
-  const syncEntries = async () => {
-    if (entrySyncRunningRef.current) return
-
-    entrySyncRunningRef.current = true
-    try {
-      await syncEntriesInternal()
-    } catch (error) {
-      console.log("ENTRY SYNC UNEXPECTED ERROR:", error)
-      setSyncText("Sync error")
-      setSyncing(false)
-    } finally {
-      entrySyncRunningRef.current = false
-    }
-  }
-
-  const loadEntriesFromSupabase = async () => {
-    const { data, error } = await supabase
-      .from("entries")
-     .select("id, entry_date, trailer, from_place, to_place, status, note, reg_number, client_sync_id")
-      .eq("driver_id", driverId)
-      .order("id", { ascending: true })
-
-    if (error) {
-      console.log("LOAD ENTRIES ERROR:", error)
-      setSyncText("Offline mode")
-      return
-    }
-
-    const localPending = dedupeEntriesById(
-      loadFromStorage<Entry[]>(entriesStorageKey, []).filter(
-        (entry) =>
-          entry.syncStatus === "pending" ||
-          entry.syncStatus === "delete_pending"
-      )
-    )
-
-  const remoteEntries: Entry[] = (data ?? []).map((entry) => ({
-  id: entry.id,
-  date: entry.entry_date,
-  trailer: entry.trailer,
-  regNumber: entry.reg_number ?? "",
-  from: entry.from_place,
-  to: entry.to_place,
-  status: entry.status,
-  note: entry.note,
-  clientSyncId: entry.client_sync_id ?? undefined,
-  syncStatus: "synced",
-}))
-
-    const remoteById = new Map(remoteEntries.map((entry) => [entry.id, entry]))
-    const remoteByClientSyncId = new Map(
-      remoteEntries
-        .filter((entry) => entry.clientSyncId)
-        .map((entry) => [entry.clientSyncId!, entry])
-    )
-    const shadowedRemoteIds = new Set<number>()
-
-    const reconciledPending = localPending.map((localEntry) => {
-      const remoteMatch =
-        remoteById.get(localEntry.id) ??
-        (localEntry.clientSyncId
-          ? remoteByClientSyncId.get(localEntry.clientSyncId)
-          : undefined)
-
-      if (!remoteMatch) return localEntry
-
-      shadowedRemoteIds.add(remoteMatch.id)
-
-      return {
-        ...remoteMatch,
-        ...localEntry,
-        id: remoteMatch.id,
-        clientSyncId: localEntry.clientSyncId ?? remoteMatch.clientSyncId,
-        syncStatus: localEntry.syncStatus,
-      }
-    })
-
-    const allEntries = dedupeEntriesById([
-      ...remoteEntries.filter((entry) => !shadowedRemoteIds.has(entry.id)),
-      ...reconciledPending,
-    ])
-
-  const currentWeekEntries = allEntries
-  .filter(
-    (entry) => getWeekTitleFromEntryDate(entry.date) === currentWeekTitle
-  )
-  .sort((a, b) => a.id - b.id)
-
-    const archiveGroups = allEntries
-      .filter((entry) => getWeekTitleFromEntryDate(entry.date) !== currentWeekTitle)
-      .reduce((groups, entry) => {
-        const weekTitle = getWeekTitleFromEntryDate(entry.date)
-
-        if (!groups[weekTitle]) {
-          groups[weekTitle] = []
-        }
-
-        groups[weekTitle].push(entry)
-        return groups
-      }, {} as Record<string, Entry[]>)
-
-    const nextArchives: WeekArchive[] = Object.entries(archiveGroups)
-      .map(([title, archiveEntries]) => ({
-        id: Number(title.replace(/\D/g, "")),
-        title,
-        date: title,
-        entries: archiveEntries,
-      }))
-      .sort((a, b) => b.id - a.id)
-
-    setEntries(currentWeekEntries)
-    setArchives(nextArchives)
-
-    localStorage.setItem(entriesStorageKey, JSON.stringify(currentWeekEntries))
-    localStorage.setItem(archivesStorageKey, JSON.stringify(nextArchives))
-
-    setSyncText("Loaded")
-
-    if (
-      navigator.onLine &&
-      currentWeekEntries.some(
-        (entry) =>
-          entry.syncStatus === "pending" ||
-          entry.syncStatus === "delete_pending"
-      )
-    ) {
-      setTimeout(() => {
-        void syncEntries()
-      }, 0)
-    }
-  }
-
-  useLayoutEffect(() => {
-    try {
-      localStorage.setItem(entriesStorageKey, JSON.stringify(entries))
-    } catch (storageError) {
-      console.log("ENTRY STORAGE ERROR:", storageError)
-    }
-  }, [entries, entriesStorageKey])
-
-  useEffect(() => {
-    loadEntriesFromSupabase()
-    loadDriverTruck()
-    loadTrucks()
-
-    const handleOnline = () => {
-      syncEntries()
-    }
-
-    window.addEventListener("online", handleOnline)
-
-    return () => {
-      window.removeEventListener("online", handleOnline)
-    }
-  }, [])
-
-  useLayoutEffect(() => {
-    localStorage.setItem(archivesStorageKey, JSON.stringify(archives))
-  }, [archives, archivesStorageKey])
-
-  useLayoutEffect(() => {
-    const savedWeekTitle = localStorage.getItem(activeWeekStorageKey)
-
-    if (!savedWeekTitle) {
-      localStorage.setItem(activeWeekStorageKey, currentWeekTitle)
-      return
-    }
-
-if (savedWeekTitle !== currentWeekTitle && shouldStartNewWeek()) {
-    if (entries.length > 0) {
-        setArchives((prev) => [
-          {
-            id: Date.now(),
-            title: savedWeekTitle,
-            date: savedWeekTitle,
-            entries,
-          },
-          ...prev,
-        ])
-      }
-
-      setEntries([])
-      localStorage.setItem(activeWeekStorageKey, currentWeekTitle)
-    }
-  }, [activeWeekStorageKey, currentWeekTitle, entries])
-
-useLayoutEffect(() => {
-  if (screen === "archives") return
-  if (visibleEntries.length === 0) return
-
-  const el = listRef.current
-  if (!el) return
-
-  el.scrollTop = el.scrollHeight
-}, [screen, visibleEntries.length])
-
-const exportToExcel = () => {
-  if (visibleEntries.length === 0) {
-    alert("No entries to export")
-    return
-  }
-
-  const parseDate = (dateText: string) => {
-    const [year, month, day] = dateText.split(".").map(Number)
-    return new Date(year, month - 1, day)
-  }
-
-  const formatExcelDate = (dateText: string) => {
-    const date = parseDate(dateText)
-    const day = String(date.getDate()).padStart(2, "0")
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const year = date.getFullYear()
-
-    return `${day}/${month}/${year}`
-  }
-
-  const formatDayName = (dateText: string) => {
-    return parseDate(dateText).toLocaleDateString("en-GB", {
-      weekday: "long",
-    })
-  }
-
- const rows: any[] = []
-
-visibleEntries.forEach((entry, index) => {
-  const previousEntry = visibleEntries[index - 1]
-
-  if (previousEntry && previousEntry.date !== entry.date) {
-    rows.push({
-      Day: "",
-      Date: "",
-      Trailer: "",
-      From: "",
-      To: "",
-      "Loaded/Empty/Solo": "",
-      Reference: "",
-      Driver: "",
-      Reg: "",
-    })
-  }
-
-  rows.push({
-    Day: formatDayName(entry.date),
-    Date: formatExcelDate(entry.date),
-    Trailer: entry.trailer,
-    From: entry.from,
-    To: entry.to,
-    "Loaded/Empty/Solo": entry.status,
-    Reference: "",
-    Driver: driverName,
-    Reg: entry.regNumber ?? "",
+function formatDayName(dateText: string) {
+  return parseEntryDate(dateText).toLocaleDateString("en-GB", {
+    weekday: "long",
   })
-})
+}
+
+function normalizePlace(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "")
+}
+
+function isCnm(value: string) {
+  return normalizePlace(value) === "cnm"
+}
+
+function isShercock(value: string) {
+  const normalized = normalizePlace(value)
+  return normalized === "shercock" || normalized === "sherkock"
+}
+
+function isLoaded(entry: DaveEntry) {
+  return entry.status.trim().toUpperCase() === "L"
+}
+
+function normalizeTrailer(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "")
+}
+
+function compareEntries(a: DaveEntry, b: DaveEntry) {
+  const byDate = a.date.localeCompare(b.date)
+  if (byDate !== 0) return byDate
+  return a.id - b.id
+}
+
+function buildDaveEntries(allEntries: DaveEntry[]) {
+  const grouped = new Map<string, DaveEntry[]>()
+
+  for (const entry of allEntries) {
+    const trailer = normalizeTrailer(entry.trailer)
+    if (!trailer || trailer === "--//--") continue
+
+    const group = grouped.get(trailer) ?? []
+    group.push(entry)
+    grouped.set(trailer, group)
+  }
+
+  const removedIds = new Set<number>()
+  const mergedEntries: DaveEntry[] = []
+
+  for (const trailerEntries of grouped.values()) {
+    const ordered = [...trailerEntries].sort(compareEntries)
+
+    for (let index = 0; index < ordered.length - 1; ) {
+      const first = ordered[index]
+      const second = ordered[index + 1]
+
+      if (!isLoaded(first) || !isLoaded(second)) {
+        index += 1
+        continue
+      }
+
+      const shercockToCnm =
+        isShercock(first.from) &&
+        isCnm(first.to) &&
+        isCnm(second.from) &&
+        !isCnm(second.to) &&
+        !isShercock(second.to)
+
+      if (shercockToCnm) {
+        removedIds.add(first.id)
+        removedIds.add(second.id)
+
+        mergedEntries.push({
+          ...second,
+          from: first.from,
+        })
+
+        index += 2
+        continue
+      }
+
+      const cnmToShercock =
+        !isCnm(first.from) &&
+        !isShercock(first.from) &&
+        isCnm(first.to) &&
+        isCnm(second.from) &&
+        isShercock(second.to)
+
+      if (cnmToShercock) {
+        removedIds.add(first.id)
+        removedIds.add(second.id)
+
+        mergedEntries.push({
+          ...first,
+          to: second.to,
+        })
+
+        index += 2
+        continue
+      }
+
+      index += 1
+    }
+  }
+
+  return [
+    ...allEntries.filter((entry) => !removedIds.has(entry.id)),
+    ...mergedEntries,
+  ].sort(compareEntries)
+}
+
+function writeDaveWorkbook(
+  entries: DaveEntry[],
+  driverName: string,
+  monday: Date,
+  sunday: Date
+) {
+  const rows: Array<Record<string, string>> = []
+
+  entries.forEach((entry, index) => {
+    const previousEntry = entries[index - 1]
+
+    if (previousEntry && previousEntry.date !== entry.date) {
+      rows.push({
+        Day: "",
+        Date: "",
+        Trailer: "",
+        From: "",
+        To: "",
+        "Loaded/Empty/Solo": "",
+        Reference: "",
+        Driver: "",
+        Reg: "",
+      })
+    }
+
+    rows.push({
+      Day: formatDayName(entry.date),
+      Date: formatExcelDate(entry.date),
+      Trailer: entry.trailer,
+      From: entry.from,
+      To: entry.to,
+      "Loaded/Empty/Solo": entry.status,
+      Reference: "",
+      Driver: driverName,
+      Reg: entry.regNumber,
+    })
+  })
 
   const worksheet = XLSX.utils.json_to_sheet(rows)
-
   const range = XLSX.utils.decode_range(worksheet["!ref"]!)
 
-for (let R = range.s.r; R <= range.e.r; ++R) {
-  for (let C = range.s.c; C <= range.e.c; ++C) {
-    const cell = XLSX.utils.encode_cell({ r: R, c: C })
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+      const cell = XLSX.utils.encode_cell({ r: row, c: column })
+      if (!worksheet[cell]) continue
 
-    if (!worksheet[cell]) continue
-
-    worksheet[cell].s = {
-  font: {
-    name: "Arial",
-    sz: 18,
-  },
-  alignment: {
-    horizontal: C === 5 ? "center" : "left",
-    vertical: "center",
-  },
-}
+      worksheet[cell].s = {
+        font: {
+          name: "Arial",
+          sz: 18,
+        },
+        alignment: {
+          horizontal: column === 5 ? "center" : "left",
+          vertical: "center",
+        },
+      }
+    }
   }
-}
 
   worksheet["!cols"] = [
     { wch: 14 },
@@ -933,1014 +257,162 @@ for (let R = range.s.r; R <= range.e.r; ++R) {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, "Entries")
 
-const exportWeekTitle =
-  screen === "archive" && activeArchive
-    ? activeArchive.title
-    : currentWeekTitle
-
-const exportYear =
-  visibleEntries[0]?.date?.split(".")[0] ?? String(monday.getFullYear())
-
-const fileName = `${formatWeekTitle(exportWeekTitle)}   ${exportYear} ${driverName}.xlsx`
+  const exportYear = entries[0]?.date?.split(".")[0] ?? String(monday.getFullYear())
+  const fileName = `${formatWeekTitle(monday, sunday)}   ${exportYear} ${driverName} Dave.xlsx`
 
   XLSX.writeFile(workbook, fileName)
 }
 
-  const groupedEntries = visibleEntries.reduce((groups, entry) => {
-    if (!groups[entry.date]) groups[entry.date] = []
-    groups[entry.date].push(entry)
-    return groups
-  }, {} as Record<string, Entry[]>)
+export default function DriverApp(props: DriverAppProps) {
+  const { driverId, driverName, isBoss = false } = props
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const allowOriginalExportRef = useRef(false)
+  const [showExportChoices, setShowExportChoices] = useState(false)
+  const [exportingDave, setExportingDave] = useState(false)
 
-  const updateVisibleEntries = (nextEntries: Entry[]) => {
-    if (screen === "archive" && activeArchiveId) {
-      setArchives((prev) =>
-        prev.map((archive) =>
-          archive.id === activeArchiveId
-            ? { ...archive, entries: nextEntries }
-            : archive
-        )
-      )
-    } else {
-      setEntries(nextEntries)
-    }
+  const handleClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isBoss || allowOriginalExportRef.current) return
+
+    const target = event.target as HTMLElement
+    const button = target.closest("button")
+    if (!button) return
+
+    const label = button.textContent?.replace(/\s+/g, " ").trim() ?? ""
+    if (label !== "📊 Export to Excel" && label !== "Export to Excel") return
+
+    event.preventDefault()
+    event.stopPropagation()
+    setShowExportChoices(true)
   }
 
-  const clearPhotos = () => {
-    photoPreviews.forEach((url) => URL.revokeObjectURL(url))
-    setPhotoFiles([])
-    setPhotoPreviews([])
-    setSavedPhotos([])
-  }
+  const exportOriginal = () => {
+    const buttons = Array.from(rootRef.current?.querySelectorAll("button") ?? [])
+    const exportButton = buttons.find((button) => {
+      const label = button.textContent?.replace(/\s+/g, " ").trim() ?? ""
+      return label === "📊 Export to Excel" || label === "Export to Excel"
+    })
 
-  const loadEntryPhotos = async (entryId: number) => {
-    const { data, error } = await supabase
-      .from("entry_photos")
-      .select("id, entry_id, photo_url, file_path")
-      .eq("entry_id", entryId)
-      .order("created_at", { ascending: true })
-
-    if (error) {
-      console.log("LOAD PHOTOS ERROR:", error)
+    if (!exportButton) {
+      alert("Original Excel export button not found")
       return
     }
 
-    setSavedPhotos(await hydratePrivatePhotoUrls((data ?? []) as EntryPhoto[]))
+    allowOriginalExportRef.current = true
+    exportButton.click()
+    allowOriginalExportRef.current = false
+    setShowExportChoices(false)
   }
 
-  const compressPhotoForUpload = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      const reader = new FileReader()
-
-      reader.onload = () => {
-        img.src = reader.result as string
-      }
-
-      img.onload = () => {
-        const canvas = document.createElement("canvas")
-        const maxWidth = 1600
-        const scale = Math.min(1, maxWidth / img.width)
-
-        canvas.width = img.width * scale
-        canvas.height = img.height * scale
-
-        const ctx = canvas.getContext("2d")
-        if (!ctx) {
-          reject("Canvas error")
-          return
-        }
-
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              reject("Compression error")
-              return
-            }
-
-            console.log("UPLOAD PHOTO SIZE KB:", Math.round(blob.size / 1600))
-            resolve(blob)
-          },
-          "image/jpeg",
-          0.75
-        )
-      }
-
-      reader.onerror = reject
-      img.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
-
-  const uploadPhotosForEntry = async (entryId: number) => {
-    if (photoFiles.length === 0) return
-
-    for (const file of photoFiles) {
-      const compressedFile = await compressPhotoForUpload(file)
-
-      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-      const filePath = `${driverId}/${entryId}/${Date.now()}-${cleanName}`
-
-      try {
-        await uploadPrivatePhoto(filePath, compressedFile)
-      } catch (uploadError) {
-        console.log("PHOTO UPLOAD ERROR:", uploadError)
-        throw uploadError
-      }
-
-      const { error: photoInsertError } = await supabase
-        .from("entry_photos")
-        .insert({
-          entry_id: entryId,
-          photo_url: filePath,
-          file_path: filePath,
-        })
-
-      if (photoInsertError) {
-        console.log("PHOTO INSERT ERROR:", photoInsertError)
-        throw photoInsertError
-      }
-    }
-  }
-
-const openPreview = async (entry: Entry) => {
-  setPreviewEntry(entry)
-
-  const { data } = await supabase
-    .from("entry_photos")
-    .select("id, entry_id, photo_url, file_path")
-    .eq("entry_id", entry.id)
-
-  setPreviewPhotos(await hydratePrivatePhotoUrls((data ?? []) as EntryPhoto[]))
-}
-
-  const openEdit = (entry: Entry) => {
-  setPhotoFiles([])
-  setPhotoPreviews([])
-  setSavedPhotos([])
-
-  setEditingId(entry.id)
-
-setNewEntry({
-  trailer: entry.trailer,
-  regNumber: entry.regNumber ?? "",
-  from: entry.from,
-  to: entry.to,
-  status: entry.status,
-  note: entry.note,
-})
-
-  if (entry.localPhotos && entry.localPhotos.length > 0) {
-    setPhotoPreviews(entry.localPhotos)
-  } else {
-    loadEntryPhotos(entry.id)
-  }
-
-  setShowModal(true)
-}
-
-  const saveUsedPlacesToTop = () => {
-    setPlaces((prevPlaces) => {
-      const usedPlaces = [newEntry.from.trim(), newEntry.to.trim()].filter(Boolean)
-
-      return [
-        ...usedPlaces,
-        ...prevPlaces.filter(
-          (place) =>
-            !usedPlaces.some((used) => used.toLowerCase() === place.toLowerCase())
-        ),
-      ]
-    })
-  }
-
-  const handleBackButton = () => {
-    if (screen === "archives") {
-      setScreen("main")
+  const exportToDave = async () => {
+    if (!navigator.onLine) {
+      alert("Internet is required for Excel to Dave")
       return
     }
 
-    if (screen === "archive") {
-      setScreen("archives")
-      return
-    }
+    setExportingDave(true)
 
-    onBack?.()
-  }
-
-const filesToBase64 = async (files: File[]) => {
-  const compressFile = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const img = new Image()
-      const reader = new FileReader()
-
-      reader.onload = () => {
-        img.src = reader.result as string
-      }
-
-      img.onload = () => {
-        const canvas = document.createElement("canvas")
-        const maxWidth = 1600
-        const scale = Math.min(1, maxWidth / img.width)
-
-        canvas.width = img.width * scale
-        canvas.height = img.height * scale
-
-        const ctx = canvas.getContext("2d")
-        if (!ctx) {
-          reject("Canvas error")
-          return
-        }
-
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-
-        resolve(canvas.toDataURL("image/jpeg", 0.75))
-      }
-
-      reader.onerror = reject
-      img.onerror = reject
-      reader.readAsDataURL(file)
-    })
-
-  const compressedPhotos: string[] = []
-  for (const file of files) {
-    compressedPhotos.push(await compressFile(file))
-  }
-
-  return compressedPhotos
-}
-
-const saveEntry = async () => {
-  if (saving) return
-
-  setSaving(true)
-
-  const savedNewEntry = { ...newEntry }
-  const savedEditingId = editingId
-  const savedPhotoFiles = [...photoFiles]
-
-  saveUsedPlacesToTop()
-
-  const oldEntry = savedEditingId
-    ? visibleEntries.find((entry) => entry.id === savedEditingId)
-    : null
-
-  const entryDate = oldEntry?.date ?? formatEntryDate(new Date())
-  const localId = savedEditingId ?? Date.now()
-  const photoQueueId =
-    savedPhotoFiles.length > 0 ? Date.now() : oldEntry?.photoQueueId
-  const clientSyncId =
-    oldEntry?.clientSyncId ?? (!savedEditingId ? crypto.randomUUID() : undefined)
-
-  const nextEntries: Entry[] = dedupeEntriesById(
-    savedEditingId
-      ? visibleEntries.map((entry) =>
-          entry.id === savedEditingId
-            ? {
-                ...entry,
-                ...savedNewEntry,
-                date: entryDate,
-                regNumber: savedNewEntry.regNumber || driverTruck,
-                photoQueueId,
-                clientSyncId: entry.clientSyncId ?? clientSyncId,
-                syncStatus: "pending" as const,
-              }
-            : entry
-        )
-      : [
-          ...visibleEntries,
-          {
-            id: localId,
-            date: entryDate,
-            ...savedNewEntry,
-            regNumber: savedNewEntry.regNumber || driverTruck,
-            localPhotos: [],
-            photoQueueId,
-            clientSyncId,
-            syncStatus: "pending",
-          },
-        ]
-  )
-
-  updateVisibleEntries(nextEntries)
-  try {
-    localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
-  } catch (storageError) {
-    console.log("ENTRY STORAGE ERROR:", storageError)
-  }
-
-  setShowModal(false)
-  setEditingId(null)
-  clearPhotos()
-
-setNewEntry({
-  trailer: "",
-  regNumber: "",
-  from: "CnM",
-  to: "Stena",
-  status: "L",
-  note: "",
-})
-
-  setSyncText("Syncing...")
-  setSyncing(true)
-
-  setTimeout(async () => {
     try {
-      const localPhotos = await filesToBase64(savedPhotoFiles)
+      const monday = getWeekStart(new Date())
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
 
-      if (photoQueueId !== undefined && localPhotos.length > 0) {
-        await saveQueuedPhotos(driverId, photoQueueId, localPhotos)
-      }
+      const weekStart = formatEntryDate(monday)
+      const weekEnd = formatEntryDate(sunday)
 
-      const withPhotos = dedupeEntriesById(
-        loadFromStorage<Entry[]>(entriesStorageKey, []).map((entry) =>
-          entry.id === localId
-            ? {
-                ...entry,
-                localPhotos: [],
-                photoQueueId,
-                clientSyncId: entry.clientSyncId ?? clientSyncId,
-                syncStatus: "pending" as const,
-              }
-            : entry
+      const { data, error } = await supabase
+        .from("entries")
+        .select(
+          "id, driver_id, entry_date, trailer, from_place, to_place, status, note, reg_number"
         )
+        .gte("entry_date", weekStart)
+        .lte("entry_date", weekEnd)
+        .order("entry_date", { ascending: true })
+        .order("id", { ascending: true })
+
+      if (error) throw error
+
+      const allEntries: DaveEntry[] = (data ?? []).map((entry) => ({
+        id: entry.id,
+        driverId: entry.driver_id,
+        date: entry.entry_date,
+        trailer: entry.trailer ?? "",
+        from: entry.from_place ?? "",
+        to: entry.to_place ?? "",
+        status: entry.status ?? "",
+        note: entry.note ?? "",
+        regNumber: entry.reg_number ?? "",
+      }))
+
+      const daveEntries = buildDaveEntries(allEntries).filter(
+        (entry) => entry.driverId === driverId
       )
 
-      setEntries(withPhotos)
-      try {
-        localStorage.setItem(entriesStorageKey, JSON.stringify(withPhotos))
-      } catch (storageError) {
-        console.log("ENTRY STORAGE ERROR:", storageError)
+      if (daveEntries.length === 0) {
+        alert("No entries to export for this driver")
+        return
       }
 
-      if (navigator.onLine && screen === "main") {
-        await syncEntries()
-      } else {
-        setSyncText("Saved offline. Will sync later.")
-        setSyncing(false)
-      }
+      writeDaveWorkbook(daveEntries, driverName, monday, sunday)
+      setShowExportChoices(false)
     } catch (error) {
-      console.log("BACKGROUND SAVE ERROR:", error)
-      setSyncText("Photo prepare error")
-      setSyncing(false)
+      console.log("DAVE EXCEL EXPORT ERROR:", error)
+      alert("Excel to Dave export failed")
     } finally {
-      setSaving(false)
+      setExportingDave(false)
     }
-  }, 100)
-}
-
-  const deleteEntry = async (entryToDelete: Entry) => {
-    const confirmed = confirm("Delete this entry?")
-    if (!confirmed) return
-
-    const isLocalOnly = entryToDelete.id > 1000000000000
-
-    const nextEntries = dedupeEntriesById(
-      entryToDelete.syncStatus === "pending" && isLocalOnly
-        ? visibleEntries.filter((entry) => entry.id !== entryToDelete.id)
-        : visibleEntries.map((entry) =>
-            entry.id === entryToDelete.id
-              ? { ...entry, syncStatus: "delete_pending" as const }
-              : entry
-          )
-    )
-
-    updateVisibleEntries(nextEntries)
-    const queueId = entryToDelete.photoQueueId ?? entryToDelete.id
-    await removeQueuedPhotos(driverId, queueId).catch(() => undefined)
-
-    try {
-      localStorage.setItem(entriesStorageKey, JSON.stringify(nextEntries))
-    } catch (storageError) {
-      console.log("ENTRY STORAGE ERROR:", storageError)
-    }
-
-    setTimeout(() => {
-      if (navigator.onLine) syncEntries()
-    }, 300)
   }
 
   return (
-<main className="h-[100dvh] bg-white flex flex-col w-full overflow-hidden">
-<div className="px-4 pt-2 pb-2">
-  <div className="flex items-center justify-between">
-   <button
-  onClick={handleBackButton}
-className={
-  screen === "main" && !isBoss
-    ? "text-blue-500 text-[17px] font-regular"
-    : "w-[30px] text-[34px] text-blue-500 leading-none"
-}
->
-  {screen === "main" && !isBoss ? "Logout" : "‹"}
-</button>
-
- <div className="bg-white border border-green-400 rounded-[18px] px-4 py-1 flex flex-col items-center">
-
-  <h1 className="text-[17px] font-normal tracking-tight text-black">
-    {screen === "archives" ? "Archives" : visibleTitle}
-  </h1>
-
-      {driverName && (
-        <p className="text-[20px] font-medium text-black">
-          {driverName}
-        </p>
-      )}
-
-      <p
-        className={
-          syncText === "Synced" || syncText === "Loaded"
-            ? "text-[12px] font-normal text-green-600"
-            : "text-[11px] font-normal text-zinc-400"
-        }
+    <>
+      <div
+        ref={rootRef}
+        onClickCapture={handleClickCapture}
+        className="contents"
       >
-        {syncing
-          ? "🔄 Syncing"
-          : syncText === "Synced" || syncText === "Loaded"
-          ? (
-            <>
-      <span className="text-green-600 font-bold">&#10003;</span>
-              <span className="text-black"> Synced</span>
-            </>
-          )
-          : "⏳ Offline"}
-      </p>
-    </div>
-
-   {screen === "main" ? (
-      <button
-        onClick={() => setShowMainMenu(true)}
-       className="text-blue-500 text-[28px] leading-none"
-      >
-        ☰
-      </button>
-    ) : screen === "archive" && isBoss ? (
-      <button
-        onClick={exportToExcel}
-        className="text-[28px]"
-      >
-        📊
-      </button>
-    ) : (
-      <div className="w-5" />
-    )}
-  </div>
-</div>
-
-{screen === "miles" && (
-  <MilesPage
-    driverId={driverId}
-    onBack={() => setScreen("main")}
-  />
-)}
-
-{screen === "diesel" && (
-  <DieselPage
-    driverId={driverId}
-    onBack={() => setScreen("main")}
-    isBoss={isBoss}
-  />
-)}
-
-{screen === "dailyCheck" && (
-  <DailyCheckPage
-    driverId={driverId}
-    onBack={() => setScreen("main")}
-  />
-)}
-{screen === "archives" ? (
-  <div className="flex-1 px-3 overflow-y-auto pb-[90px]">
-    <div className="space-y-1">
-      {archives.length === 0 && (
-        <p className="text-center text-zinc-400 mt-10">No archives yet</p>
-      )}
-
-      {archives.map((archive) => (
-        <button
-          key={archive.id}
-          onClick={() => {
-            setActiveArchiveId(archive.id)
-            setScreen("archive")
-          }}
-         className="w-full h-[34px] rounded-[14px] bg-[#f5f5f5] border border-[#eeeeee] px-3 relative flex items-center active:scale-[0.98] transition-all"
-        >
-          <span className="absolute left-4 text-[13px] text-zinc-400">
-            {new Date().getFullYear()}
-          </span>
-
-          <span className="w-full text-center text-[16px] font-bold text-black">
-            {formatWeekTitle(archive.title)}
-          </span>
-
-          <span className="absolute right-4 text-[13px] text-zinc-400">
-            {archive.entries.length} rows
-          </span>
-        </button>
-      ))}
-    </div>
-  </div>
-) : (
-        <div
-  ref={listRef}
-className="flex-1 min-h-0 px-3 overflow-y-auto overscroll-none"
->
-          {Object.entries(groupedEntries).map(([date, dayEntries]) => (
-          <div key={date} className="mb-3">
-           <p className="text-center text-[15px] font-semi-bold text-zinc-500">
-  {formatDisplayDate(date)}
-</p>
-
-              <div className="space-y-1">
-                {dayEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-  onClick={() => openPreview(entry)}
-                   
-className="select-none bg-[#f5f5f5] border border-[#eeeeee] rounded-[14px] h-[34px] px-3 flex items-center"
-                >
-                    <div className="w-[72px] shrink-0">
-                      <p className="select-none text-[12px] font-bold text-black truncate">
-                        {entry.trailer}
-                      </p>
-                    </div>
-
-                    <div className="w-[170px] shrink-0 pr-2">
-                      <p className="select-none text-[12px] text-black truncate">
-                        {entry.from} → {entry.to}
-                      </p>
-                    </div>
-
-                    <div className="w-[54px] shrink-0 flex justify-start">
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          entry.status === "L"
-                            ? "bg-green-500"
-                            : entry.status === "E"
-                            ? "bg-yellow-400"
-                            : "bg-red-500"
-                        }`}
-                      >
-                        <span className="select-none text-white text-[10px] font-bold">
-                          {entry.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 -ml-6 min-w-0">
-                      <p className="select-none text-[12px] text-zinc-400 truncate">
-                        {entry.note}
-                      </p>
-                    </div>
-
-                    <div className="w-[22px] shrink-0 text-right text-[11px]">
-                     {entry.syncStatus === "pending"
-  ? "⌛"
-  : entry.syncStatus === "synced"
-? <span className="text-green-600 font-bold">&#10003;</span>
-  : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div ref={bottomRef} className="h-[1px]" />
-        </div>
-      )}
-
-      {screen !== "archives" && (
-        <div 
-        className="shrink-0 px-3 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 bg-white"
-        >
-          <button
-            onClick={() => {
-              setEditingId(null)
-              clearPhotos()
-       setNewEntry({
-  trailer: "",
-  regNumber: "",
-  from: "CnM",
-  to: "Stena",
-  status: "L",
-  note: "",
-})
-              setShowModal(true)
-            }}
-            className="w-full h-[50px] rounded-[18px] bg-blue-500 text-white text-[16px] font-bold active:scale-[0.98] transition-all"
-          >
-            NEW ENTRY
-          </button>
-        </div>
-      )}
-
-      {showMainMenu && (
-        <div
-          onClick={() => setShowMainMenu(false)}
-          className="fixed inset-0 z-[70] bg-black/10 flex items-start justify-end pt-[105px] pr-4"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-[220px] bg-white/90 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl"
-          >
-            <button
-              onClick={() => {
-                setScreen("archives")
-                setShowMainMenu(false)
-              }}
-             className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
-            >
-<span className="w-6 text-center text-[22px] text-yellow-500 font-extrabold">▰</span>
-Archives
-            </button>
-
-            <button
-              onClick={() => {
-                setShowMainMenu(false)
-                setShowPlaceModal(true)
-              }}
-            className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
-            >
-<span className="w-6 text-center text-[22px] text-blue-500 font-extrabold">+</span>
-Add Place
-            </button>
-
-  <button
-  onClick={() => {
-    setScreen("miles")
-    setShowMainMenu(false)
-  }}
-  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
->
-  <span className="w-6 text-center text-[22px]">🛣️</span>
-  Miles
-</button>
-
-<button
-  onClick={() => {
-    setScreen("diesel")
-    setShowMainMenu(false)
-  }}
-  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
->
-  <span className="w-6 text-center text-[22px]">⛽</span>
-  Diesel
-</button>
-
-<button
-  onClick={() => {
-    setScreen("dailyCheck")
-    setShowMainMenu(false)
-  }}
-  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
->
-  <span className="w-6 text-center text-[22px]">✅</span>
-  Daily Check
-</button>
-
-{isBoss && screen === "main" && (
-<button
-  onClick={exportToExcel}
-  className="w-full h-[45px] px-6 flex items-center gap-4 text-[17px] font-normal text-black"
->
-    <span className="w-6 text-center text-[22px]">📊</span>
-    Export to Excel
-  </button>
-)}
-
-          </div>
-        </div>
-      )}
-
-      {previewEntry && (
-  <div
-    onClick={() => {
-      setPreviewEntry(null)
-      setPreviewPhotos([])
-    }}
-    className="fixed inset-0 z-[55] bg-black/50 flex items-center justify-center"
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className="w-[340px] bg-white rounded-[20px] p-4"
-    >
-      <h3 className="text-center text-[20px] font-bold mb-3">
-        {previewEntry.trailer}
-      </h3>
-
-    <p className="text-center text-[18px] mb-2">
-  Reg: <span className="font-bold">{previewEntry.regNumber}</span>
-</p>
-
-      <p className="text-center mb-2">
-        {previewEntry.from} → {previewEntry.to}
-      </p>
-
-      <p className="text-center mb-2">
-        Status: {previewEntry.status}
-      </p>
-
-      <p className="text-center text-zinc-500 mb-4">
-        {previewEntry.note}
-      </p>
-
-      <div className="flex gap-2 overflow-x-auto">
-        {previewPhotos.map((photo) => (
-          <img
-            key={photo.id}
-            src={photo.photo_url}
-            onClick={() => setSelectedPhoto(photo.photo_url)}
-            className="w-[90px] h-[90px] rounded-[12px] object-cover"
-          />
-        ))}
+        <DriverAppOriginal {...props} />
       </div>
 
-    <div className="flex gap-2 mt-4">
-  <button
-   onClick={() => {
-  const entry = previewEntry
-  if (!entry) return
-
-  setPreviewEntry(null)
-  setPreviewPhotos([])
-
-  openEdit(entry)
-}}
-    className="flex-1 h-[46px] rounded-[16px] bg-blue-500 text-white font-bold"
-  >
-    Edit
-  </button>
-
-{(isBoss || previewEntry?.id === visibleEntries[visibleEntries.length - 1]?.id) && (
-  <button
-    onClick={() => {
-      deleteEntry(previewEntry!)
-      setPreviewEntry(null)
-      setPreviewPhotos([])
-    }}
-    className="flex-1 h-[46px] rounded-[16px] bg-red-500 text-white font-bold"
-  >
-    Delete
-  </button>
-)}
-
-  <button
-    onClick={() => {
-      setPreviewEntry(null)
-      setPreviewPhotos([])
-    }}
-    className="flex-1 h-[46px] rounded-[16px] bg-zinc-200 text-black font-bold"
- 
->
-  Close
-</button>
-</div>
-</div>
-</div>
-)}
-
-   {showPlaceModal && (
-  <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
-    <div className="w-full max-w-[430px] bg-[#efeff4] rounded-t-[34px] px-4 pt-8 pb-6">
-      <h2 className="text-center text-[24px] font-bold text-black mb-5">
-        Add Place
-      </h2>
-
-      <input
-        placeholder="Place name"
-        value={newPlace}
-        onChange={(e) => setNewPlace(e.target.value)}
-        className="w-full h-[50px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-3"
-      />
-
-      <button
-        onClick={() => {
-          const cleanPlace = newPlace.trim()
-          if (!cleanPlace) return
-
-          setPlaces((prevPlaces) => [
-            cleanPlace,
-            ...prevPlaces.filter(
-              (place) => place.toLowerCase() !== cleanPlace.toLowerCase()
-            ),
-          ])
-
-          setNewPlace("")
-          setShowPlaceModal(false)
-        }}
-        className="w-full h-[50px] rounded-[22px] bg-blue-500 text-white text-[18px] font-bold active:scale-[0.98]"
-      >
-        Add Place
-      </button>
-
-      <button
-        onClick={() => {
-          setNewPlace("")
-          setShowPlaceModal(false)
-        }}
-        className="w-full h-[46px] mt-2 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-)}
-
-{showModal && (
-      <div className="fixed inset-0 bg-[#efeff4] z-[90] flex items-start justify-center">
-       <div className="w-full max-w-[430px] max-h-[100vh] bg-[#efeff4] rounded-t-[34px] px-4 pt-[52px] pb-6 overflow-y-auto">
-            <h2 className="text-center text-[20px] font-bold text-black mb-2">
-              {editingId ? "Edit Entry" : "New Entry"}
-            </h2>
- <input
-  placeholder="Trailer No"
-  value={newEntry.trailer}
-  onChange={(e) =>
-    setNewEntry((prev) => ({
-      ...prev,
-      trailer: e.target.value.toUpperCase(),
-    }))
-  }
-  className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
-/>
-
-
-
-  <select
-              value={newEntry.from}
-              onChange={(e) =>
-                setNewEntry((prev) => ({ ...prev, from: e.target.value }))
-              }
-
-
- 
-              className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center text-blue-500 outline-none mb-1"
-            >
-              {places.map((place, index) => (
-                <option key={`${place}-${index}`} value={place}>
-                  {place}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={newEntry.to}
-              onChange={(e) =>
-                setNewEntry((prev) => ({ ...prev, to: e.target.value }))
-              }
-              className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center text-blue-500 outline-none mb-1"
-            >
-              {places.map((place, index) => (
-                <option key={`${place}-${index}`} value={place}>
-                  {place}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex gap-4 mb-1">
-              {["L", "E", "S"].map((status) => (
-                <button
-                  key={status}
-                  onClick={() =>
-                    setNewEntry((prev) => ({
-                      ...prev,
-                      status,
-                      trailer:
-                        status === "S"
-                          ? "--//--"
-                          : prev.trailer === "--//--"
-                          ? ""
-                          : prev.trailer,
-                    }))
-                  }
-                  className={`flex-1 h-[46px] rounded-[20px] text-[20px] font-bold text-white transition-all ${
-                    newEntry.status === status
-                      ? status === "L"
-                        ? "bg-green-500"
-                        : status === "E"
-                        ? "bg-yellow-400"
-                        : "bg-red-500"
-                      : "bg-[#cfcfd4]"
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-
-            <input
-              placeholder="Job Ref / Note"
-              value={newEntry.note}
-              onChange={(e) =>
-                setNewEntry((prev) => ({ ...prev, note: e.target.value }))
-              }
-              className="w-full h-[46px] rounded-[20px] bg-[#dfdfe4] px-5 text-[18px] text-center outline-none placeholder:text-zinc-400 mb-1"
-            />
-
-          <div className="w-full flex gap-3 mb-1">
-
-
- <select
- value={newEntry.regNumber || driverTruck}
-  onChange={(e) =>
-    setNewEntry((prev) => ({
-      ...prev,
-      regNumber: e.target.value,
-    }))
-  }
-  className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-center text-zinc-700 px-3"
->
-<option value="">Reg Number</option>
-
-{trucks.map((truck) => (
-  <option key={truck} value={truck}>
-    {truck}
-  </option>
-))}
-</select>
-  <label className="flex-1 h-[46px] rounded-[18px] bg-[#fdfdfc] text-[16px] font-semibold text-zinc-500 flex items-center justify-center">
-    + Add Photo
-
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      multiple
-      className="hidden"
-      onChange={(e) => {
-        const files = Array.from(e.target.files ?? [])
-        if (files.length === 0) return
-
-        setPhotoFiles((prev) => [...prev, ...files])
-        setPhotoPreviews((prev) => [
-          ...prev,
-          ...files.map((file) => URL.createObjectURL(file)),
-        ])
-
-        e.target.value = ""
-      }}
-    />
-  </label>
-
-</div>
-
-            {savedPhotos.map((item) => (
-            <img
-  key={item.id}
-  src={item.photo_url}
-  alt="saved photo"
-  onClick={() => setSelectedPhoto(item.photo_url)}
-  className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block cursor-pointer"
-/>
-            ))}
-
-            {photoPreviews.map((url, index) => (
-           <img
-  key={url}
-  src={url}
-  alt={`preview ${index + 1}`}
-  onClick={() => setSelectedPhoto(url)}
-  className="w-[70px] h-[70px] object-cover rounded-[12px] m-1 inline-block cursor-pointer"
-/>
-            ))}
-
-           <button
-  onClick={saveEntry}
-  disabled={saving}
-  className="w-full h-[46px] rounded-[22px] bg-blue-500 text-white text-[20px] font-bold active:scale-[0.98] disabled:opacity-50"
->
-  {saving ? "Saving..." : "Save Entry"}
-</button>
+      {showExportChoices && (
+        <div
+          onClick={() => {
+            if (!exportingDave) setShowExportChoices(false)
+          }}
+          className="fixed inset-0 z-[120] bg-black/20 flex items-center justify-center px-4"
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[330px] bg-white/95 backdrop-blur-xl rounded-[28px] overflow-hidden shadow-xl p-3"
+          >
+            <p className="text-center text-[20px] font-bold text-black py-3">
+              Export to Excel
+            </p>
 
             <button
-              onClick={() => {
-                setShowModal(false)
-                setEditingId(null)
-                clearPhotos()
-              }}
-              className="w-full h-[46px] mt-1 rounded-[20px] text-zinc-500 text-[17px] font-semibold"
+              onClick={exportOriginal}
+              disabled={exportingDave}
+              className="w-full h-[52px] rounded-[18px] bg-[#f1f1f3] text-black text-[17px] font-semibold mb-2 active:scale-[0.98] disabled:opacity-50"
+            >
+              Excel Original
+            </button>
+
+            <button
+              onClick={() => void exportToDave()}
+              disabled={exportingDave}
+              className="w-full h-[52px] rounded-[18px] bg-blue-500 text-white text-[17px] font-bold active:scale-[0.98] disabled:opacity-50"
+            >
+              {exportingDave ? "Preparing..." : "Excel to Dave"}
+            </button>
+
+            <button
+              onClick={() => setShowExportChoices(false)}
+              disabled={exportingDave}
+              className="w-full h-[46px] mt-1 text-zinc-500 text-[16px] font-semibold disabled:opacity-50"
             >
               Cancel
             </button>
           </div>
         </div>
       )}
-
-{selectedPhoto && (
-  <div
-    className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
-    onClick={() => setSelectedPhoto(null)}
-  >
-    <img
-      src={selectedPhoto}
-      alt="Full screen"
-      className="max-w-full max-h-full object-contain"
-    />
-  </div>
-)}
-
-    </main>
+    </>
   )
 }
